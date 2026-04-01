@@ -576,20 +576,48 @@
       `;
     }
 
+    function buildSideViewMeta(m) {
+      return `
+        Piezas/capa: ${num((valorNumericoSeguro(m.piezas_largo, 0) || 0) * (valorNumericoSeguro(m.piezas_ancho, 0) || 0))} ·
+        Columnas: ${num(valorNumericoSeguro(m.piezas_largo, 0))} ·
+        Fondo: ${num(valorNumericoSeguro(m.piezas_ancho, 0))} ·
+        Niveles: ${num(valorNumericoSeguro(m.niveles, 0))}
+      `;
+    }
+
+    function mountSideSvg(container, svgMarkup) {
+      const figure = document.createElement('div');
+      figure.className = 'tech-figure side-figure';
+      figure.style.width = '100%';
+      figure.style.height = '100%';
+
+      const parsed = new DOMParser().parseFromString(String(svgMarkup || '').trim(), 'image/svg+xml');
+      const svgNode = parsed.documentElement;
+      if (svgNode && String(svgNode.tagName || '').toLowerCase() === 'svg') {
+        const imported = document.importNode(svgNode, true);
+        imported.setAttribute('width', String(TECH_VIEW.width));
+        imported.setAttribute('height', String(TECH_VIEW.height));
+        imported.setAttribute('viewBox', `0 0 ${TECH_VIEW.width} ${TECH_VIEW.height}`);
+        imported.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+        figure.appendChild(imported);
+      } else {
+        figure.innerHTML = svgMarkup;
+      }
+
+      container.appendChild(figure);
+    }
+
 
     function renderSideView(m) {
       const figureContainer = document.getElementById('layoutSide');
       const metaContainer = document.getElementById('layoutSideMeta');
       if (!figureContainer) return;
 
-      figureContainer.innerHTML = buildSideViewSvg(m);
+      figureContainer.innerHTML = '';
+      mountSideSvg(figureContainer, buildSideViewSvg(m));
       if (metaContainer) {
-        metaContainer.innerHTML = `
-          Piezas/capa: ${num((valorNumericoSeguro(m.piezas_largo, 0) || 0) * (valorNumericoSeguro(m.piezas_ancho, 0) || 0))} ·
-          Columnas: ${num(valorNumericoSeguro(m.piezas_largo, 0))} ·
-          Fondo: ${num(valorNumericoSeguro(m.piezas_ancho, 0))} ·
-          Niveles: ${num(valorNumericoSeguro(m.niveles, 0))}
-        `;
+        metaContainer.className = 'tech-meta side-meta';
+        metaContainer.innerHTML = buildSideViewMeta(m);
       }
     }
 
