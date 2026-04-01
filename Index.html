@@ -550,14 +550,14 @@
 
       const rollW = rolloAnchoReal * scale;
       const rollHBase = rolloAltoReal * scale;
-      const rollH = rollHBase * 1.1;
+      const rollH = rollHBase * 1.05;
 
       const gridW = columnas * rollW;
-      const levelGap = Math.min(6, Math.max(2, rollH * 0.10));
+      const levelGap = Math.min(4, Math.max(1.5, rollH * 0.06));
       const gridH = (niveles * rollH) + (Math.max(0, niveles - 1) * levelGap);
-      const bottomPad = Math.min(6, ctx.boxH * 0.02);
       const offsetX = ctx.ox + ((ctx.boxW - gridW) / 2);
-      const offsetY = ctx.oy + ctx.boxH - gridH - bottomPad;
+      const opticalLift = ctx.boxH * 0.03;
+      const offsetY = ctx.oy + ((ctx.boxH - gridH) / 2) - opticalLift;
 
       const bg = document.createElementNS(svgNS, 'rect');
       bg.setAttribute('x', '0');
