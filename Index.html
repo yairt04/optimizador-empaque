@@ -544,13 +544,20 @@
       const niveles = Math.max(0, valorNumericoSeguro(m?.niveles, 0));
 
       const ctx = buildTechnicalCanvas(baseReal, altoReal);
-      const scaleX = ctx.boxW / baseReal;
-      const scaleY = ctx.boxH / altoReal;
-      const scale = Math.min(scaleX, scaleY);
+
+      const visualHeightBoost = 1.05;
+      const levelGapReal = Math.max(0, rolloAltoReal * 0.06);
+
+      const layoutRealW = columnas * rolloAnchoReal;
+      const layoutRealH = (niveles * (rolloAltoReal * visualHeightBoost)) + (Math.max(0, niveles - 1) * levelGapReal);
+
+      const fitScaleX = ctx.boxW / Math.max(layoutRealW, 1);
+      const fitScaleY = ctx.boxH / Math.max(layoutRealH, 1);
+      const scale = Math.min(fitScaleX, fitScaleY);
 
       const rollW = rolloAnchoReal * scale;
-      const rollHBase = rolloAltoReal * scale;
-      const rollH = rollHBase * 1.05;
+      const rollH = (rolloAltoReal * visualHeightBoost) * scale;
+      const levelGap = levelGapReal * scale;
 
       const gridW = columnas * rollW;
       const levelGap = Math.min(4, Math.max(1.5, rollH * 0.06));
