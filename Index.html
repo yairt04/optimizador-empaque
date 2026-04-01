@@ -219,6 +219,7 @@
 
     .svg-wrap svg{display:block;width:100%;height:100%;min-width:0;flex:1 1 auto}
     .svg-wrap.is-scrollable{overflow:auto}
+    #layoutSide{min-height:320px}
 
     .tech-meta{margin-top:6px;font-size:11px;color:var(--rb-gray);line-height:1.35;padding:0 2px}
     .tech-figure{width:100%;height:100%;display:flex}
@@ -522,58 +523,141 @@
     }
 
     function buildSideViewSvg(m) {
-      const cajaBase = valorNumericoSeguro(m.largo_caja_mm, 1);
-      const cajaAlto = valorNumericoSeguro(m.alto_caja_mm, valorNumericoSeguro(m.alto_total_mm, 1));
-      const niveles = Math.max(0, valorNumericoSeguro(m.niveles, 0));
-      const piezasLargo = Math.max(0, valorNumericoSeguro(m.piezas_largo, 0));
-      const diametro = valorNumericoSeguro(m.diametro_efectivo_mm, 1);
-      const altoRollo = valorNumericoSeguro(m.ancho_efectivo_mm, 1);
-      const ctx = buildTechnicalCanvas(cajaBase, cajaAlto);
+      const svgNS = 'http://www.w3.org/2000/svg';
+      const svg = document.createElementNS(svgNS, 'svg');
+      svg.setAttribute('width', '100%');
+      svg.setAttribute('height', '100%');
+      svg.setAttribute('viewBox', `0 0 ${TECH_VIEW.width} ${TECH_VIEW.height}`);
+      svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
 
-      const rollW = diametro * ctx.scale;
-      const rollH = altoRollo * ctx.scale;
-      const cols = Math.max(1, piezasLargo);
+      const cajaBase = Math.max(1, valorNumericoSeguro(m?.largo_caja_mm, 1));
+      const cajaAlto = Math.max(1, valorNumericoSeguro(m?.alto_caja_mm, valorNumericoSeguro(m?.alto_total_mm, 1)));
+      const niveles = Math.max(0, valorNumericoSeguro(m?.niveles, 0));
+      const columnas = Math.max(0, valorNumericoSeguro(m?.piezas_largo, 0));
+
+      const ctx = buildTechnicalCanvas(cajaBase, cajaAlto);
+      const cols = Math.max(1, columnas);
       const rows = Math.max(1, niveles);
 
-      const gridW = rollW * cols;
-      const gridH = rollH * rows;
+      const pad = 8;
+      const maxRollW = (ctx.boxW - (pad * 2)) / cols;
+      const maxRollH = (ctx.boxH - (pad * 2)) / rows;
+      const rollW = Math.max(10, Math.min(maxRollW, maxRollH * 1.1));
+      const rollH = Math.max(10, Math.min(maxRollH, rollW * 1.2));
+
+      const gridW = cols * rollW;
+      const gridH = rows * rollH;
       const offsetX = ctx.ox + ((ctx.boxW - gridW) / 2);
-      const offsetY = ctx.oy + ctx.boxH - gridH;
+      const offsetY = ctx.oy + ((ctx.boxH - gridH) / 2);
 
-      let stacks = '';
-      for (let nivel = 0; nivel < niveles; nivel++) {
-        const y = offsetY + (rows - 1 - nivel) * rollH;
-        const tagY = y + (rollH / 2) + 3;
-        stacks += `<text x="${ctx.ox - 8}" y="${tagY}" text-anchor="end" font-size="10" fill="#667085">N${nivel + 1}</text>`;
+      const bg = document.createElementNS(svgNS, 'rect');
+      bg.setAttribute('x', '0');
+      bg.setAttribute('y', '0');
+      bg.setAttribute('width', String(TECH_VIEW.width));
+      bg.setAttribute('height', String(TECH_VIEW.height));
+      bg.setAttribute('fill', '#ffffff');
+      svg.appendChild(bg);
 
-        for (let col = 0; col < cols; col++) {
-          const x = offsetX + col * rollW;
-          const arcH = Math.max(rollH * 0.2, 2.2);
-          stacks += `
-            <rect x="${x}" y="${y + arcH / 2}" width="${rollW}" height="${Math.max(rollH - arcH, 2)}" fill="#ffffff" stroke="#4f5f70" stroke-width="1"/>
-            <ellipse cx="${x + rollW / 2}" cy="${y + arcH / 2}" rx="${rollW / 2}" ry="${arcH / 2}" fill="#f1f5fa" stroke="#4f5f70" stroke-width="1"/>
-            <ellipse cx="${x + rollW / 2}" cy="${y + rollH - arcH / 2}" rx="${rollW / 2}" ry="${arcH / 2}" fill="none" stroke="#c7d0dc" stroke-width="0.8"/>
-          `;
+      const box = document.createElementNS(svgNS, 'rect');
+      box.setAttribute('x', String(ctx.ox));
+      box.setAttribute('y', String(ctx.oy));
+      box.setAttribute('width', String(ctx.boxW));
+      box.setAttribute('height', String(ctx.boxH));
+      box.setAttribute('fill', '#f8fbff');
+      box.setAttribute('stroke', '#1e2937');
+      box.setAttribute('stroke-width', '2');
+      svg.appendChild(box);
+
+      const floor = document.createElementNS(svgNS, 'line');
+      floor.setAttribute('x1', String(ctx.ox));
+      floor.setAttribute('y1', String(ctx.oy + ctx.boxH));
+      floor.setAttribute('x2', String(ctx.ox + ctx.boxW));
+      floor.setAttribute('y2', String(ctx.oy + ctx.boxH));
+      floor.setAttribute('stroke', '#8ea0b5');
+      floor.setAttribute('stroke-width', '1');
+      floor.setAttribute('stroke-dasharray', '4 4');
+      svg.appendChild(floor);
+
+      if (!niveles || !columnas) {
+        const msg = document.createElementNS(svgNS, 'text');
+        msg.setAttribute('x', String(ctx.ox + (ctx.boxW / 2)));
+        msg.setAttribute('y', String(ctx.oy + (ctx.boxH / 2)));
+        msg.setAttribute('text-anchor', 'middle');
+        msg.setAttribute('font-size', '13');
+        msg.setAttribute('fill', '#667085');
+        msg.textContent = 'Sin datos suficientes para vista lateral';
+        svg.appendChild(msg);
+      } else {
+        for (let nivel = 0; nivel < niveles; nivel++) {
+          const y = offsetY + (rows - 1 - nivel) * rollH;
+
+          const tag = document.createElementNS(svgNS, 'text');
+          tag.setAttribute('x', String(ctx.ox - 8));
+          tag.setAttribute('y', String(y + (rollH / 2) + 3));
+          tag.setAttribute('text-anchor', 'end');
+          tag.setAttribute('font-size', '10');
+          tag.setAttribute('fill', '#667085');
+          tag.textContent = `N${nivel + 1}`;
+          svg.appendChild(tag);
+
+          for (let col = 0; col < cols; col++) {
+            const x = offsetX + col * rollW;
+            const arcH = Math.max(rollH * 0.2, 2.2);
+
+            const body = document.createElementNS(svgNS, 'rect');
+            body.setAttribute('x', String(x));
+            body.setAttribute('y', String(y + arcH / 2));
+            body.setAttribute('width', String(rollW));
+            body.setAttribute('height', String(Math.max(rollH - arcH, 2)));
+            body.setAttribute('fill', '#ffffff');
+            body.setAttribute('stroke', '#4f5f70');
+            body.setAttribute('stroke-width', '1');
+            svg.appendChild(body);
+
+            const top = document.createElementNS(svgNS, 'ellipse');
+            top.setAttribute('cx', String(x + rollW / 2));
+            top.setAttribute('cy', String(y + arcH / 2));
+            top.setAttribute('rx', String(rollW / 2));
+            top.setAttribute('ry', String(arcH / 2));
+            top.setAttribute('fill', '#f1f5fa');
+            top.setAttribute('stroke', '#4f5f70');
+            top.setAttribute('stroke-width', '1');
+            svg.appendChild(top);
+
+            const bottom = document.createElementNS(svgNS, 'ellipse');
+            bottom.setAttribute('cx', String(x + rollW / 2));
+            bottom.setAttribute('cy', String(y + rollH - arcH / 2));
+            bottom.setAttribute('rx', String(rollW / 2));
+            bottom.setAttribute('ry', String(arcH / 2));
+            bottom.setAttribute('fill', 'none');
+            bottom.setAttribute('stroke', '#c7d0dc');
+            bottom.setAttribute('stroke-width', '0.8');
+            svg.appendChild(bottom);
+          }
         }
       }
 
-      return `
-        <svg width="${TECH_VIEW.width}" height="${TECH_VIEW.height}" viewBox="0 0 ${TECH_VIEW.width} ${TECH_VIEW.height}" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
-          <rect x="0" y="0" width="${TECH_VIEW.width}" height="${TECH_VIEW.height}" fill="#ffffff"/>
-          <rect x="${ctx.ox}" y="${ctx.oy}" width="${ctx.boxW}" height="${ctx.boxH}" fill="#f8fbff" stroke="#1e2937" stroke-width="2"/>
-          <line x1="${ctx.ox}" y1="${ctx.oy + ctx.boxH}" x2="${ctx.ox + ctx.boxW}" y2="${ctx.oy + ctx.boxH}" stroke="#8ea0b5" stroke-width="1" stroke-dasharray="4 4"/>
-          ${stacks}
-          ${generateBoxGuides({
-            ox: ctx.ox,
-            oy: ctx.oy,
-            boxW: ctx.boxW,
-            boxH: ctx.boxH,
-            hLabel: `${num(m.largo_caja_mm)} mm base`,
-            vLabel: `${num(cajaAlto)} mm altura útil`
-          })}
-          <text x="22" y="26" font-size="13" font-weight="700" fill="#1f2937">${escapeHtml(m.tipo_caja)} · vista lateral</text>
-        </svg>
-      `;
+      const guidesGroup = document.createElementNS(svgNS, 'g');
+      guidesGroup.innerHTML = generateBoxGuides({
+        ox: ctx.ox,
+        oy: ctx.oy,
+        boxW: ctx.boxW,
+        boxH: ctx.boxH,
+        hLabel: `${num(m?.largo_caja_mm)} mm base`,
+        vLabel: `${num(cajaAlto)} mm altura útil`
+      });
+      svg.appendChild(guidesGroup);
+
+      const title = document.createElementNS(svgNS, 'text');
+      title.setAttribute('x', '22');
+      title.setAttribute('y', '26');
+      title.setAttribute('font-size', '13');
+      title.setAttribute('font-weight', '700');
+      title.setAttribute('fill', '#1f2937');
+      title.textContent = `${m?.tipo_caja || 'Caja'} · vista lateral`;
+      svg.appendChild(title);
+
+      return svg;
     }
 
     function buildSideViewMeta(m) {
@@ -591,9 +675,10 @@
       const metaContainer = document.getElementById('layoutSideMeta');
       if (!figureContainer) return;
 
-      figureContainer.innerHTML = buildSideViewSvg(m);
+      figureContainer.replaceChildren();
+      figureContainer.appendChild(buildSideViewSvg(m || {}));
       if (metaContainer) {
-        metaContainer.innerHTML = buildSideViewMeta(m);
+        metaContainer.innerHTML = buildSideViewMeta(m || {});
       }
     }
 
