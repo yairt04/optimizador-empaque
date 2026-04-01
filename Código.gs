@@ -187,9 +187,14 @@ function formatearResultadoFinal_(rollo, mejor) {
     alto_caja_mm: mejor ? mejor.alto_caja_mm : '',
     piezas_largo: mejor ? mejor.piezas_largo : 0,
     piezas_ancho: mejor ? mejor.piezas_ancho : 0,
+    piezas_por_capa: mejor ? mejor.piezas_por_capa : 0,
     niveles: mejor ? mejor.niveles : 0,
     cantidad_max: mejor ? mejor.cantidad_max : 0,
     aprovechamiento: mejor ? mejor.aprovechamiento : 0,
+    variante_seleccionada: mejor ? mejor.variante_seleccionada : '',
+    score_final: mejor ? mejor.score_final : 0,
+    repetible: mejor ? mejor.repetible : false,
+    viable_altura: mejor ? mejor.viable_altura : false,
     criterio: 'vertical_torre_max_cantidad',
     estatus: mejor ? mejor.estatus : 'SIN RESULTADO'
   };
@@ -222,10 +227,22 @@ function calcularMatch_(rollo, caja, parametros) {
 
   let piezasLargo = 0;
   let piezasAncho = 0;
+  let piezasPorCapa = 0;
   let niveles = 0;
   let cantidadMax = 0;
   let aprovechamiento = 0;
   let estatus = 'NO CABE';
+  let scoreFinal = 0;
+  let varianteSeleccionada = 'ninguna';
+  let sobranteLargoMm = 0;
+  let sobranteAnchoMm = 0;
+  let sobranteAltoMm = 0;
+  let repetible = false;
+  let viableAltura = false;
+  let layoutRows = [];
+  let layoutOffsets = [];
+  let motivoDescarte = '';
+  let variantesEvaluadas = [];
 
   if (
     anchoEfectivo > 0 &&
@@ -234,17 +251,47 @@ function calcularMatch_(rollo, caja, parametros) {
     largoCaja > 0 &&
     altoCaja > 0
   ) {
-    piezasLargo = Math.floor(largoCaja / diametroEfectivo);
-    piezasAncho = Math.floor(anchoCaja / diametroEfectivo);
-    niveles = Math.floor(altoCaja / anchoEfectivo);
+    const variantes = generarVariantesRepetibles_(largoCaja, anchoCaja, diametroEfectivo);
+    variantesEvaluadas = variantes.map(v =>
+      evaluarVarianteVertical_(v, {
+        largoCaja,
+        anchoCaja,
+        altoCaja,
+        anchoEfectivo,
+        diametroEfectivo,
+        diametroCalculo,
+        anchoRollo
+      })
+    );
+    const mejorVariante = seleccionarMejorVariante_(variantesEvaluadas);
 
-    cantidadMax = piezasLargo * piezasAncho * niveles;
+    if (mejorVariante) {
+      piezasLargo = mejorVariante.piezas_largo;
+      piezasAncho = mejorVariante.piezas_ancho;
+      piezasPorCapa = mejorVariante.piezas_por_capa;
+      niveles = mejorVariante.niveles;
+      cantidadMax = mejorVariante.cantidad_total;
+      aprovechamiento = mejorVariante.aprovechamiento_base;
+      scoreFinal = mejorVariante.score_final;
+      varianteSeleccionada = mejorVariante.nombre_variante;
+      sobranteLargoMm = mejorVariante.sobrante_largo_mm;
+      sobranteAnchoMm = mejorVariante.sobrante_ancho_mm;
+      sobranteAltoMm = mejorVariante.sobrante_alto_mm;
+      repetible = mejorVariante.repetible;
+      viableAltura = mejorVariante.viable_altura;
+      layoutRows = mejorVariante.layout_rows || [];
+      layoutOffsets = mejorVariante.layout_offsets || [];
+      estatus = 'OK';
+    } else {
+      motivoDescarte = 'Sin variante repetible/viable por altura.';
+    }
 
     const volumenRollo = Math.PI * Math.pow(diametroCalculo / 2, 2) * anchoRollo;
     const volumenCaja = anchoCaja * largoCaja * altoCaja;
     aprovechamiento = volumenCaja > 0 ? (cantidadMax * volumenRollo) / volumenCaja : 0;
-
-    estatus = cantidadMax > 0 ? 'OK' : 'NO CABE';
+    if (cantidadMax <= 0) {
+      estatus = 'NO CABE';
+    }
   }
 
   return {
@@ -264,14 +311,188 @@ function calcularMatch_(rollo, caja, parametros) {
     ancho_caja_mm: anchoCaja,
     largo_caja_mm: largoCaja,
     alto_caja_mm: altoCaja,
+    variante_seleccionada: varianteSeleccionada,
+    piezas_por_capa: piezasPorCapa,
     piezas_largo: piezasLargo,
     piezas_ancho: piezasAncho,
     niveles: niveles,
     cantidad_max: cantidadMax,
     aprovechamiento: aprovechamiento,
+    score_final: scoreFinal,
+    sobrante_largo_mm: sobranteLargoMm,
+    sobrante_ancho_mm: sobranteAnchoMm,
+    sobrante_alto_mm: sobranteAltoMm,
+    repetible: repetible,
+    viable_altura: viableAltura,
+    motivo_descarte: motivoDescarte,
+    layout_rows: JSON.stringify(layoutRows),
+    layout_offsets: JSON.stringify(layoutOffsets),
+    variantes_evaluadas: JSON.stringify(variantesEvaluadas),
     criterio: criterio,
     estatus: estatus
   };
+}
+
+function generarVariantesRepetibles_(largoCaja, anchoCaja, diametroEfectivo) {
+  const variantes = [];
+  const filasGrid = Math.floor(anchoCaja / diametroEfectivo);
+  const colsGrid = Math.floor(largoCaja / diametroEfectivo);
+  variantes.push({
+    nombre_variante: 'grid_recto',
+    tipo: 'grid',
+    paso_y_mm: diametroEfectivo,
+    filas: filasGrid,
+    cols: colsGrid
+  });
+
+  const pasoYTresbolillo = diametroEfectivo * 0.8660254038;
+  const filasTresbolillo = Math.floor(((anchoCaja - diametroEfectivo) / pasoYTresbolillo) + 1);
+  variantes.push({
+    nombre_variante: 'grid_alternado_tresbolillo',
+    tipo: 'tresbolillo',
+    paso_y_mm: pasoYTresbolillo,
+    filas: Math.max(0, filasTresbolillo),
+    cols_par: Math.floor(largoCaja / diametroEfectivo),
+    cols_impar: Math.floor((largoCaja - (diametroEfectivo / 2)) / diametroEfectivo)
+  });
+
+  variantes.push({
+    nombre_variante: 'arranque_corrido_equivalente',
+    tipo: 'arranque_corrido',
+    paso_y_mm: pasoYTresbolillo,
+    filas: Math.max(0, filasTresbolillo),
+    cols_par: Math.floor((largoCaja - (diametroEfectivo / 2)) / diametroEfectivo),
+    cols_impar: Math.floor(largoCaja / diametroEfectivo)
+  });
+
+  return variantes;
+}
+
+function evaluarVarianteVertical_(variante, ctx) {
+  const niveles = Math.floor(ctx.altoCaja / ctx.anchoEfectivo);
+  const viableAltura = cumpleAlturaCaja_(ctx.altoCaja, niveles, ctx.anchoEfectivo);
+  const repetible = esPatronRepetible_(variante);
+  const nombre = variante.nombre_variante;
+  const out = {
+    nombre_variante: nombre,
+    piezas_largo: 0,
+    piezas_ancho: 0,
+    piezas_por_capa: 0,
+    niveles: niveles,
+    cantidad_total: 0,
+    aprovechamiento_base: 0,
+    sobrante_largo_mm: 0,
+    sobrante_ancho_mm: 0,
+    sobrante_alto_mm: Math.max(0, ctx.altoCaja - (niveles * ctx.anchoEfectivo)),
+    score_final: 0,
+    repetible: repetible,
+    viable_altura: viableAltura,
+    motivo_descarte: '',
+    layout_rows: [],
+    layout_offsets: []
+  };
+
+  if (!repetible) {
+    out.motivo_descarte = 'Patrón no repetible operativamente.';
+    return out;
+  }
+  if (!viableAltura || niveles < 1) {
+    out.motivo_descarte = 'No cumple altura útil de caja.';
+    return out;
+  }
+
+  if (variante.tipo === 'grid') {
+    out.piezas_largo = Math.max(0, variante.cols);
+    out.piezas_ancho = Math.max(0, variante.filas);
+    out.layout_rows = Array(out.piezas_ancho).fill(out.piezas_largo);
+    out.layout_offsets = Array(out.piezas_ancho).fill(0);
+    out.sobrante_largo_mm = Math.max(0, ctx.largoCaja - (out.piezas_largo * ctx.diametroEfectivo));
+    out.sobrante_ancho_mm = Math.max(0, ctx.anchoCaja - (out.piezas_ancho * ctx.diametroEfectivo));
+  } else {
+    const filas = Math.max(0, variante.filas);
+    const rows = [];
+    const offsets = [];
+    for (let i = 0; i < filas; i++) {
+      const isPar = i % 2 === 0;
+      const cols = isPar ? Math.max(0, variante.cols_par) : Math.max(0, variante.cols_impar);
+      rows.push(cols);
+      offsets.push(isPar ? 0 : 0.5);
+    }
+    out.layout_rows = rows;
+    out.layout_offsets = offsets;
+    out.piezas_ancho = rows.length;
+    out.piezas_largo = rows.length ? Math.max(...rows) : 0;
+    out.sobrante_largo_mm = Math.max(0, ctx.largoCaja - (out.piezas_largo * ctx.diametroEfectivo));
+    const anchoOcupado = out.piezas_ancho > 0
+      ? (ctx.diametroEfectivo + ((out.piezas_ancho - 1) * variante.paso_y_mm))
+      : 0;
+    out.sobrante_ancho_mm = Math.max(0, ctx.anchoCaja - anchoOcupado);
+  }
+
+  out.piezas_por_capa = out.layout_rows.reduce((acc, v) => acc + v, 0);
+  out.cantidad_total = out.piezas_por_capa * out.niveles;
+  const areaCaja = ctx.largoCaja * ctx.anchoCaja;
+  const areaRollos = out.piezas_por_capa * (Math.PI * Math.pow(ctx.diametroCalculo / 2, 2));
+  out.aprovechamiento_base = areaCaja > 0 ? areaRollos / areaCaja : 0;
+  out.score_final = calcularScoreVariante_(out);
+  if (out.cantidad_total <= 0) {
+    out.motivo_descarte = 'No caben rollos con patrón vertical repetible.';
+  }
+  return out;
+}
+
+function cumpleAlturaCaja_(altoCaja, niveles, anchoEfectivo) {
+  return (niveles * anchoEfectivo) <= altoCaja;
+}
+
+function esPatronRepetible_(variante) {
+  if (!variante || !variante.nombre_variante) return false;
+  const permitidas = ['grid_recto', 'grid_alternado_tresbolillo', 'arranque_corrido_equivalente'];
+  return permitidas.includes(variante.nombre_variante);
+}
+
+function calcularScoreVariante_(v) {
+  const sobranteTotal = v.sobrante_largo_mm + v.sobrante_ancho_mm + v.sobrante_alto_mm;
+  const simpleBonus = v.nombre_variante === 'grid_recto' ? 0.002 : 0;
+  return (v.cantidad_total * 1000000) +
+    (v.aprovechamiento_base * 1000) -
+    sobranteTotal +
+    simpleBonus;
+}
+
+function seleccionarMejorVariante_(variantes) {
+  const candidatas = (variantes || []).filter(v =>
+    v.repetible &&
+    v.viable_altura &&
+    v.cantidad_total > 0
+  );
+  if (!candidatas.length) return null;
+
+  candidatas.sort((a, b) => {
+    if (b.cantidad_total !== a.cantidad_total) return b.cantidad_total - a.cantidad_total;
+    if (b.aprovechamiento_base !== a.aprovechamiento_base) return b.aprovechamiento_base - a.aprovechamiento_base;
+    const sobranteA = a.sobrante_largo_mm + a.sobrante_ancho_mm + a.sobrante_alto_mm;
+    const sobranteB = b.sobrante_largo_mm + b.sobrante_ancho_mm + b.sobrante_alto_mm;
+    if (sobranteA !== sobranteB) return sobranteA - sobranteB;
+    return b.score_final - a.score_final;
+  });
+
+  const mejor = candidatas[0];
+  const segunda = candidatas[1];
+  if (segunda) {
+    const gapCantidad = Math.abs(mejor.cantidad_total - segunda.cantidad_total);
+    const gapPct = mejor.cantidad_total > 0 ? gapCantidad / mejor.cantidad_total : 1;
+    if (gapPct <= 0.03) {
+      const preferidaSimple = [mejor, segunda].sort((a, b) => {
+        const simpA = a.nombre_variante === 'grid_recto' ? 0 : 1;
+        const simpB = b.nombre_variante === 'grid_recto' ? 0 : 1;
+        if (simpA !== simpB) return simpA - simpB;
+        return b.score_final - a.score_final;
+      })[0];
+      return preferidaSimple;
+    }
+  }
+  return mejor;
 }
 
 function escribirResultados(rows, limpiarPrimero) {
