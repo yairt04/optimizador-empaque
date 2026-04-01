@@ -203,20 +203,26 @@
     .view-title{font-size:12px;font-weight:700;color:#2d3a4a;margin:0 0 4px 2px;letter-spacing:.015em}
 
     .svg-wrap{
-      width:100%;
-      flex:1;
-      border:1px solid #e2e8f0;
-      border-radius:10px;
-      background:#fcfdff;
-      overflow:hidden;
-      -webkit-overflow-scrolling:touch;
-      padding:4px;
-      aspect-ratio: 920 / 640;
-      min-height:280px;
-      display:flex;
-      align-items:stretch;
-    }
+    width:100%;
+    flex:1;
+    border:1px solid #e2e8f0;
+    border-radius:10px;
+    background:#fcfdff;
+    overflow:hidden;
+    -webkit-overflow-scrolling:touch;
+    padding:4px;
+    aspect-ratio: 920 / 640;
+    min-height:280px;
+    display:flex;
 
+    /* 🔥 CAMBIAR ESTO */
+    align-items:center;
+    justify-content:center;
+    }
+    #layoutSide svg{
+    max-width:100%;
+    max-height:100%;
+    }
     .svg-wrap svg{display:block;width:100%;height:100%;min-width:0;flex:1 1 auto}
     .svg-wrap.is-scrollable{overflow:auto}
     #layoutSide{min-height:320px}
@@ -542,8 +548,9 @@
       const pad = 8;
       const maxRollW = (ctx.boxW - (pad * 2)) / cols;
       const maxRollH = (ctx.boxH - (pad * 2)) / rows;
-      const rollW = Math.max(10, Math.min(maxRollW, maxRollH * 1.1));
-      const rollH = Math.max(10, Math.min(maxRollH, rollW * 1.2));
+      const rollSize = Math.min(maxRollW, maxRollH);
+      const rollW = rollSize * 0.9;
+      const rollH = rollSize * 1.1;
 
       const gridW = cols * rollW;
       const gridH = rows * rollH;
