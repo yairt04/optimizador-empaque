@@ -547,7 +547,7 @@
 
       const visualHeightBoost = 1.05;
       const levelGapReal = Math.max(0, rolloAltoReal * 0.06);
-
+  
       const layoutRealW = columnas * rolloAnchoReal;
       const layoutRealH = (niveles * (rolloAltoReal * visualHeightBoost)) + (Math.max(0, niveles - 1) * levelGapReal);
 
@@ -560,11 +560,10 @@
       const levelGap = levelGapReal * scale;
 
       const gridW = columnas * rollW;
-      const levelGap = Math.min(4, Math.max(1.5, rollH * 0.06));
       const gridH = (niveles * rollH) + (Math.max(0, niveles - 1) * levelGap);
+
       const offsetX = ctx.ox + ((ctx.boxW - gridW) / 2);
-      const opticalLift = ctx.boxH * 0.03;
-      const offsetY = ctx.oy + ((ctx.boxH - gridH) / 2) - opticalLift;
+      const offsetY = ctx.oy + ((ctx.boxH - gridH) / 2);
 
       const bg = document.createElementNS(svgNS, 'rect');
       bg.setAttribute('x', '0');
