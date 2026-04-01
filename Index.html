@@ -507,15 +507,20 @@
       `;
     }
 
+    function valorNumericoSeguro(value, fallback = 0) {
+      const n = Number(value);
+      return Number.isFinite(n) ? n : fallback;
+    }
+
     function generarSVGSide(m) {
-      const cajaBase = Number(m.largo_caja_mm) || 1;
-      const cajaAlto = Number(m.alto_caja_mm || m.alto_total_mm || 1);
-      const niveles = Math.max(0, Number(m.niveles) || 0);
-      const piezasLargo = Math.max(0, Number(m.piezas_largo) || 0);
-      const piezasAncho = Math.max(0, Number(m.piezas_ancho) || 0);
+      const cajaBase = valorNumericoSeguro(m.largo_caja_mm, 1);
+      const cajaAlto = valorNumericoSeguro(m.alto_caja_mm, valorNumericoSeguro(m.alto_total_mm, 1));
+      const niveles = Math.max(0, valorNumericoSeguro(m.niveles, 0));
+      const piezasLargo = Math.max(0, valorNumericoSeguro(m.piezas_largo, 0));
+      const piezasAncho = Math.max(0, valorNumericoSeguro(m.piezas_ancho, 0));
       const piezasPorCapa = piezasLargo * piezasAncho;
-      const diametro = Number(m.diametro_efectivo_mm) || 1;
-      const altoRollo = Number(m.ancho_efectivo_mm) || 1;
+      const diametro = valorNumericoSeguro(m.diametro_efectivo_mm, 1);
+      const altoRollo = valorNumericoSeguro(m.ancho_efectivo_mm, 1);
       const ctx = buildTechnicalCanvas(cajaBase, cajaAlto);
 
       const rollW = diametro * ctx.scale;
