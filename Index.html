@@ -549,10 +549,12 @@
       const scale = Math.min(scaleX, scaleY);
 
       const rollW = rolloAnchoReal * scale;
-      const rollH = rolloAltoReal * scale;
+      const rollHBase = rolloAltoReal * scale;
+      const rollH = rollHBase * 1.1;
 
       const gridW = columnas * rollW;
-      const gridH = niveles * rollH;
+      const levelGap = Math.min(6, Math.max(2, rollH * 0.10));
+      const gridH = (niveles * rollH) + (Math.max(0, niveles - 1) * levelGap);
       const bottomPad = Math.min(6, ctx.boxH * 0.02);
       const offsetX = ctx.ox + ((ctx.boxW - gridW) / 2);
       const offsetY = ctx.oy + ctx.boxH - gridH - bottomPad;
@@ -595,27 +597,27 @@
         msg.textContent = 'Sin datos suficientes para vista lateral';
         svg.appendChild(msg);
       } else {
-        const strokeW = Math.max(0.8, Math.min(1.1, Math.min(rollW, rollH) * 0.04));
-        const topRy = Math.max(1.4, Math.min(rollH * 0.12, 4));
-        const bottomRy = Math.max(1.1, topRy * 0.72);
-        const levelLabelX = ctx.ox - 5;
+        const strokeW = Math.max(0.75, Math.min(1, Math.min(rollW, rollH) * 0.03));
+        const topRy = Math.max(1.2, Math.min(rollH * 0.10, 2.6));
+        const baseGuideOffset = Math.max(1.2, Math.min(2.2, topRy * 0.9));
+        const levelLabelX = ctx.ox - 6;
 
         for (let nivel = 0; nivel < niveles; nivel++) {
-          const y = offsetY + (niveles - 1 - nivel) * rollH;
+          const y = offsetY + (niveles - 1 - nivel) * (rollH + levelGap);
 
           const tag = document.createElementNS(svgNS, 'text');
           tag.setAttribute('x', String(levelLabelX));
-          tag.setAttribute('y', String(y + (rollH / 2) + 3));
+          tag.setAttribute('y', String(y + (rollH / 2) + 2));
           tag.setAttribute('text-anchor', 'end');
-          tag.setAttribute('font-size', '10');
-          tag.setAttribute('fill', '#667085');
+          tag.setAttribute('font-size', '9');
+          tag.setAttribute('fill', '#7a8797');
           tag.textContent = `N${nivel + 1}`;
           svg.appendChild(tag);
 
           for (let col = 0; col < columnas; col++) {
             const x = offsetX + col * rollW;
             const bodyY = y + topRy;
-            const bodyH = Math.max(rollH - (topRy + bottomRy), 1);
+            const bodyH = Math.max(rollH - topRy, 1);
 
             const body = document.createElementNS(svgNS, 'rect');
             body.setAttribute('x', String(x));
@@ -637,15 +639,14 @@
             top.setAttribute('stroke-width', String(strokeW));
             svg.appendChild(top);
 
-            const bottom = document.createElementNS(svgNS, 'ellipse');
-            bottom.setAttribute('cx', String(x + rollW / 2));
-            bottom.setAttribute('cy', String(y + rollH - bottomRy));
-            bottom.setAttribute('rx', String(rollW / 2));
-            bottom.setAttribute('ry', String(bottomRy));
-            bottom.setAttribute('fill', 'none');
-            bottom.setAttribute('stroke', '#aeb9c8');
-            bottom.setAttribute('stroke-width', String(Math.max(0.6, strokeW * 0.75)));
-            svg.appendChild(bottom);
+            const baseGuide = document.createElementNS(svgNS, 'line');
+            baseGuide.setAttribute('x1', String(x + strokeW));
+            baseGuide.setAttribute('y1', String(y + rollH - baseGuideOffset));
+            baseGuide.setAttribute('x2', String(x + rollW - strokeW));
+            baseGuide.setAttribute('y2', String(y + rollH - baseGuideOffset));
+            baseGuide.setAttribute('stroke', '#c3ccd8');
+            baseGuide.setAttribute('stroke-width', String(Math.max(0.5, strokeW * 0.6)));
+            svg.appendChild(baseGuide);
           }
         }
       }
