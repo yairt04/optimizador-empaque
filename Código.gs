@@ -410,23 +410,55 @@ function evaluarVarianteVertical_(variante, ctx) {
     out.sobrante_ancho_mm = Math.max(0, ctx.anchoCaja - (out.piezas_ancho * ctx.diametroEfectivo));
   } else {
     const filas = Math.max(0, variante.filas);
-    const rows = [];
-    const offsets = [];
-    for (let i = 0; i < filas; i++) {
-      const isPar = i % 2 === 0;
-      const cols = isPar ? Math.max(0, variante.cols_par) : Math.max(0, variante.cols_impar);
-      rows.push(cols);
-      offsets.push(isPar ? 0 : 0.5);
+    const offsetsCandidatos = [0, 0.25, 0.5, 0.75];
+    let mejorOffset = null;
+
+    for (const offsetX of offsetsCandidatos) {
+      const layout = construirLayoutTresbolillo_(filas, ctx.largoCaja, ctx.diametroEfectivo, offsetX);
+      const anchoOcupado = layout.piezas_ancho > 0
+        ? (ctx.diametroEfectivo + ((layout.piezas_ancho - 1) * variante.paso_y_mm))
+        : 0;
+      const candidato = {
+        nombre_variante: nombre,
+        piezas_largo: layout.piezas_largo,
+        piezas_ancho: layout.piezas_ancho,
+        piezas_por_capa: layout.layout_rows.reduce((acc, v) => acc + v, 0),
+        niveles: out.niveles,
+        cantidad_total: 0,
+        aprovechamiento_base: 0,
+        sobrante_largo_mm: Math.max(0, ctx.largoCaja - layout.max_x_ocupada_mm),
+        sobrante_ancho_mm: Math.max(0, ctx.anchoCaja - anchoOcupado),
+        sobrante_alto_mm: out.sobrante_alto_mm,
+        score_final: 0,
+        repetible: true,
+        viable_altura: true,
+        layout_rows: layout.layout_rows,
+        layout_offsets: layout.layout_offsets
+      };
+      candidato.cantidad_total = candidato.piezas_por_capa * candidato.niveles;
+      const areaCaja = ctx.largoCaja * ctx.anchoCaja;
+      const areaRollos = candidato.piezas_por_capa * (Math.PI * Math.pow(ctx.diametroCalculo / 2, 2));
+      candidato.aprovechamiento_base = areaCaja > 0 ? areaRollos / areaCaja : 0;
+      candidato.score_final = calcularScoreVariante_(candidato);
+
+      if (!mejorOffset || esMejorCandidatoTresbolillo_(candidato, mejorOffset)) {
+        mejorOffset = candidato;
+      }
     }
-    out.layout_rows = rows;
-    out.layout_offsets = offsets;
-    out.piezas_ancho = rows.length;
-    out.piezas_largo = rows.length ? Math.max(...rows) : 0;
-    out.sobrante_largo_mm = Math.max(0, ctx.largoCaja - (out.piezas_largo * ctx.diametroEfectivo));
-    const anchoOcupado = out.piezas_ancho > 0
-      ? (ctx.diametroEfectivo + ((out.piezas_ancho - 1) * variante.paso_y_mm))
-      : 0;
-    out.sobrante_ancho_mm = Math.max(0, ctx.anchoCaja - anchoOcupado);
+
+    if (mejorOffset) {
+      out.layout_rows = mejorOffset.layout_rows;
+      out.layout_offsets = mejorOffset.layout_offsets;
+      out.piezas_ancho = mejorOffset.piezas_ancho;
+      out.piezas_largo = mejorOffset.piezas_largo;
+      out.piezas_por_capa = mejorOffset.piezas_por_capa;
+      out.cantidad_total = mejorOffset.cantidad_total;
+      out.aprovechamiento_base = mejorOffset.aprovechamiento_base;
+      out.sobrante_largo_mm = mejorOffset.sobrante_largo_mm;
+      out.sobrante_ancho_mm = mejorOffset.sobrante_ancho_mm;
+      out.score_final = mejorOffset.score_final;
+      return out;
+    }
   }
 
   out.piezas_por_capa = out.layout_rows.reduce((acc, v) => acc + v, 0);
@@ -439,6 +471,40 @@ function evaluarVarianteVertical_(variante, ctx) {
     out.motivo_descarte = 'No caben rollos con patrón vertical repetible.';
   }
   return out;
+}
+
+function construirLayoutTresbolillo_(filas, largoCaja, diametroEfectivo, offsetInicial) {
+  const rows = [];
+  const offsets = [];
+  let maxXOcupada = 0;
+
+  for (let i = 0; i < filas; i++) {
+    const offset = (offsetInicial + (i % 2 === 0 ? 0 : 0.5)) % 1;
+    const espacioUtil = largoCaja - (offset * diametroEfectivo);
+    const cols = espacioUtil > 0 ? Math.floor(espacioUtil / diametroEfectivo) : 0;
+    rows.push(Math.max(0, cols));
+    offsets.push(offset);
+    const xOcupada = (offset * diametroEfectivo) + (cols * diametroEfectivo);
+    if (xOcupada > maxXOcupada) maxXOcupada = xOcupada;
+  }
+
+  return {
+    layout_rows: rows,
+    layout_offsets: offsets,
+    piezas_ancho: rows.length,
+    piezas_largo: rows.length ? Math.max(...rows) : 0,
+    max_x_ocupada_mm: maxXOcupada
+  };
+}
+
+function esMejorCandidatoTresbolillo_(a, b) {
+  if (a.cantidad_total !== b.cantidad_total) return a.cantidad_total > b.cantidad_total;
+  if (a.piezas_por_capa !== b.piezas_por_capa) return a.piezas_por_capa > b.piezas_por_capa;
+  if (a.aprovechamiento_base !== b.aprovechamiento_base) return a.aprovechamiento_base > b.aprovechamiento_base;
+  const sobranteA = a.sobrante_largo_mm + a.sobrante_ancho_mm + a.sobrante_alto_mm;
+  const sobranteB = b.sobrante_largo_mm + b.sobrante_ancho_mm + b.sobrante_alto_mm;
+  if (sobranteA !== sobranteB) return sobranteA < sobranteB;
+  return a.score_final > b.score_final;
 }
 
 function cumpleAlturaCaja_(altoCaja, niveles, anchoEfectivo) {
