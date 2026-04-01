@@ -215,6 +215,8 @@
 
     .svg-wrap svg{display:block;width:100%;height:auto;min-width:280px}
 
+    .tech-meta{margin-top:6px;font-size:11px;color:var(--rb-gray);line-height:1.35;padding:0 2px}
+
     .foot-note{margin-top:6px;color:var(--rb-gray);font-size:11px}
 
     .table-card{margin-top:10px;padding:10px}
@@ -426,7 +428,7 @@
       `;
 
       document.getElementById('layoutTop').innerHTML = generarSVGTop(mejor);
-      document.getElementById('layoutSide').innerHTML = generarSVGSide(mejor);
+      renderSideView(mejor);
       document.getElementById('tabla').innerHTML = generarTabla(data.resultados);
     }
 
@@ -512,13 +514,11 @@
       return Number.isFinite(n) ? n : fallback;
     }
 
-    function generarSVGSide(m) {
+    function buildSideViewSvg(m) {
       const cajaBase = valorNumericoSeguro(m.largo_caja_mm, 1);
       const cajaAlto = valorNumericoSeguro(m.alto_caja_mm, valorNumericoSeguro(m.alto_total_mm, 1));
       const niveles = Math.max(0, valorNumericoSeguro(m.niveles, 0));
       const piezasLargo = Math.max(0, valorNumericoSeguro(m.piezas_largo, 0));
-      const piezasAncho = Math.max(0, valorNumericoSeguro(m.piezas_ancho, 0));
-      const piezasPorCapa = piezasLargo * piezasAncho;
       const diametro = valorNumericoSeguro(m.diametro_efectivo_mm, 1);
       const altoRollo = valorNumericoSeguro(m.ancho_efectivo_mm, 1);
       const ctx = buildTechnicalCanvas(cajaBase, cajaAlto);
@@ -565,11 +565,36 @@
             vLabel: `${num(cajaAlto)} mm altura útil`
           })}
           <text x="22" y="26" font-size="13" font-weight="700" fill="#1f2937">${escapeHtml(m.tipo_caja)} · vista lateral</text>
-          <text x="22" y="604" font-size="12" fill="#3b4654">Piezas/capa: ${piezasPorCapa}</text>
-          <text x="172" y="604" font-size="12" fill="#3b4654">Columnas: ${piezasLargo}</text>
-          <text x="302" y="604" font-size="12" fill="#3b4654">Fondo: ${piezasAncho}</text>
-          <text x="402" y="604" font-size="12" fill="#3b4654">Niveles: ${niveles}</text>
         </svg>
+      `;
+    }
+
+    function buildSideViewMeta(m) {
+      const piezasLargo = Math.max(0, valorNumericoSeguro(m.piezas_largo, 0));
+      const piezasAncho = Math.max(0, valorNumericoSeguro(m.piezas_ancho, 0));
+      const niveles = Math.max(0, valorNumericoSeguro(m.niveles, 0));
+      const piezasPorCapa = piezasLargo * piezasAncho;
+
+      return `
+        <div class="tech-meta">
+          Piezas/capa: ${num(piezasPorCapa)} ·
+          Columnas: ${num(piezasLargo)} ·
+          Fondo: ${num(piezasAncho)} ·
+          Niveles: ${num(niveles)}
+        </div>
+      `;
+    }
+
+    function renderSideView(m) {
+      const container = document.getElementById('layoutSide');
+      if (!container) return;
+
+      const svg = buildSideViewSvg(m);
+      const meta = buildSideViewMeta(m);
+
+      container.innerHTML = `
+        <div class="tech-figure">${svg}</div>
+        ${meta}
       `;
     }
 
