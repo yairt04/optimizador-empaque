@@ -536,26 +536,26 @@
       svg.setAttribute('viewBox', `0 0 ${TECH_VIEW.width} ${TECH_VIEW.height}`);
       svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
 
-      const cajaBase = Math.max(1, valorNumericoSeguro(m?.largo_caja_mm, 1));
-      const cajaAlto = Math.max(1, valorNumericoSeguro(m?.alto_caja_mm, valorNumericoSeguro(m?.alto_total_mm, 1)));
-      const niveles = Math.max(0, valorNumericoSeguro(m?.niveles, 0));
+      const baseReal = Math.max(1, valorNumericoSeguro(m?.largo_caja_mm, 1));
+      const altoReal = Math.max(1, valorNumericoSeguro(m?.alto_caja_mm, valorNumericoSeguro(m?.alto_total_mm, 1)));
+      const rolloAnchoReal = Math.max(0, valorNumericoSeguro(m?.diametro_efectivo_mm, 0));
+      const rolloAltoReal = Math.max(0, valorNumericoSeguro(m?.ancho_efectivo_mm, 0));
       const columnas = Math.max(0, valorNumericoSeguro(m?.piezas_largo, 0));
+      const niveles = Math.max(0, valorNumericoSeguro(m?.niveles, 0));
 
-      const ctx = buildTechnicalCanvas(cajaBase, cajaAlto);
-      const cols = Math.max(1, columnas);
-      const rows = Math.max(1, niveles);
+      const ctx = buildTechnicalCanvas(baseReal, altoReal);
+      const scaleX = ctx.boxW / baseReal;
+      const scaleY = ctx.boxH / altoReal;
+      const scale = Math.min(scaleX, scaleY);
 
-      const pad = 8;
-      const maxRollW = (ctx.boxW - (pad * 2)) / cols;
-      const maxRollH = (ctx.boxH - (pad * 2)) / rows;
-      const rollSize = Math.min(maxRollW, maxRollH);
-      const rollW = rollSize * 0.9;
-      const rollH = rollSize * 1.1;
+      const rollW = rolloAnchoReal * scale;
+      const rollH = rolloAltoReal * scale;
 
-      const gridW = cols * rollW;
-      const gridH = rows * rollH;
+      const gridW = columnas * rollW;
+      const gridH = niveles * rollH;
+      const bottomPad = Math.min(6, ctx.boxH * 0.02);
       const offsetX = ctx.ox + ((ctx.boxW - gridW) / 2);
-      const offsetY = ctx.oy + ((ctx.boxH - gridH) / 2);
+      const offsetY = ctx.oy + ctx.boxH - gridH - bottomPad;
 
       const bg = document.createElementNS(svgNS, 'rect');
       bg.setAttribute('x', '0');
@@ -585,7 +585,7 @@
       floor.setAttribute('stroke-dasharray', '4 4');
       svg.appendChild(floor);
 
-      if (!niveles || !columnas) {
+      if (!niveles || !columnas || !rolloAnchoReal || !rolloAltoReal) {
         const msg = document.createElementNS(svgNS, 'text');
         msg.setAttribute('x', String(ctx.ox + (ctx.boxW / 2)));
         msg.setAttribute('y', String(ctx.oy + (ctx.boxH / 2)));
@@ -595,11 +595,16 @@
         msg.textContent = 'Sin datos suficientes para vista lateral';
         svg.appendChild(msg);
       } else {
+        const strokeW = Math.max(0.8, Math.min(1.1, Math.min(rollW, rollH) * 0.04));
+        const topRy = Math.max(1.4, Math.min(rollH * 0.12, 4));
+        const bottomRy = Math.max(1.1, topRy * 0.72);
+        const levelLabelX = ctx.ox - 5;
+
         for (let nivel = 0; nivel < niveles; nivel++) {
-          const y = offsetY + (rows - 1 - nivel) * rollH;
+          const y = offsetY + (niveles - 1 - nivel) * rollH;
 
           const tag = document.createElementNS(svgNS, 'text');
-          tag.setAttribute('x', String(ctx.ox - 8));
+          tag.setAttribute('x', String(levelLabelX));
           tag.setAttribute('y', String(y + (rollH / 2) + 3));
           tag.setAttribute('text-anchor', 'end');
           tag.setAttribute('font-size', '10');
@@ -607,38 +612,39 @@
           tag.textContent = `N${nivel + 1}`;
           svg.appendChild(tag);
 
-          for (let col = 0; col < cols; col++) {
+          for (let col = 0; col < columnas; col++) {
             const x = offsetX + col * rollW;
-            const arcH = Math.max(rollH * 0.2, 2.2);
+            const bodyY = y + topRy;
+            const bodyH = Math.max(rollH - (topRy + bottomRy), 1);
 
             const body = document.createElementNS(svgNS, 'rect');
             body.setAttribute('x', String(x));
-            body.setAttribute('y', String(y + arcH / 2));
+            body.setAttribute('y', String(bodyY));
             body.setAttribute('width', String(rollW));
-            body.setAttribute('height', String(Math.max(rollH - arcH, 2)));
+            body.setAttribute('height', String(bodyH));
             body.setAttribute('fill', '#ffffff');
             body.setAttribute('stroke', '#4f5f70');
-            body.setAttribute('stroke-width', '1');
+            body.setAttribute('stroke-width', String(strokeW));
             svg.appendChild(body);
 
             const top = document.createElementNS(svgNS, 'ellipse');
             top.setAttribute('cx', String(x + rollW / 2));
-            top.setAttribute('cy', String(y + arcH / 2));
+            top.setAttribute('cy', String(y + topRy));
             top.setAttribute('rx', String(rollW / 2));
-            top.setAttribute('ry', String(arcH / 2));
-            top.setAttribute('fill', '#f1f5fa');
+            top.setAttribute('ry', String(topRy));
+            top.setAttribute('fill', '#f3f7fc');
             top.setAttribute('stroke', '#4f5f70');
-            top.setAttribute('stroke-width', '1');
+            top.setAttribute('stroke-width', String(strokeW));
             svg.appendChild(top);
 
             const bottom = document.createElementNS(svgNS, 'ellipse');
             bottom.setAttribute('cx', String(x + rollW / 2));
-            bottom.setAttribute('cy', String(y + rollH - arcH / 2));
+            bottom.setAttribute('cy', String(y + rollH - bottomRy));
             bottom.setAttribute('rx', String(rollW / 2));
-            bottom.setAttribute('ry', String(arcH / 2));
+            bottom.setAttribute('ry', String(bottomRy));
             bottom.setAttribute('fill', 'none');
-            bottom.setAttribute('stroke', '#c7d0dc');
-            bottom.setAttribute('stroke-width', '0.8');
+            bottom.setAttribute('stroke', '#aeb9c8');
+            bottom.setAttribute('stroke-width', String(Math.max(0.6, strokeW * 0.75)));
             svg.appendChild(bottom);
           }
         }
@@ -651,7 +657,7 @@
         boxW: ctx.boxW,
         boxH: ctx.boxH,
         hLabel: `${num(m?.largo_caja_mm)} mm base`,
-        vLabel: `${num(cajaAlto)} mm altura útil`
+        vLabel: `${num(altoReal)} mm altura útil`
       });
       svg.appendChild(guidesGroup);
 
