@@ -235,6 +235,20 @@
     .table-card{margin-top:10px;padding:10px}
     .table-card h3{margin:0 0 6px 0;font-size:15px}
     .table-wrap{width:100%;overflow:auto;border-radius:10px;border:1px solid #e6ebf2}
+    .suggestion-card{
+      margin-top:10px;
+      background:#fff;
+      border:1px solid var(--rb-border);
+      border-left:4px solid #2563eb;
+      border-radius:10px;
+      padding:10px 12px;
+      font-size:13px;
+      color:#1f2937;
+      line-height:1.4;
+    }
+    .suggestion-card.warn{border-left-color:#f59e0b;background:#fffbeb}
+    .suggestion-card.ok{border-left-color:#16a34a;background:#f0fdf4}
+    .suggestion-title{font-weight:700;margin-bottom:4px}
 
     table{width:100%;min-width:760px;border-collapse:collapse;font-size:12px;background:#fff}
     th,td{border:1px solid #edf1f5;padding:8px 7px;text-align:left;vertical-align:middle}
@@ -317,6 +331,7 @@
     </div>
 
     <div class="panel table-card">
+      <div id="sugerenciaCard" class="suggestion-card">Selecciona un SKU para evaluar sugerencia de caja.</div>
       <h3>Comparativo por caja</h3>
       <div id="tabla"></div>
     </div>
@@ -444,7 +459,44 @@
 
       document.getElementById('layoutTop').innerHTML = generarSVGTop(mejor);
       renderSideView(mejor);
+      renderSugerencia(data.sugerencia, mejor);
       document.getElementById('tabla').innerHTML = generarTabla(data.resultados);
+    }
+
+    function renderSugerencia(sugerencia, mejor) {
+      const node = document.getElementById('sugerenciaCard');
+      if (!node) return;
+
+      const s = sugerencia || {};
+      const hay = s.hay_sugerencia === true;
+      const desperdicioAlto = s.desperdicio_alto === true;
+
+      if (hay) {
+        const pct = (Number(s.delta_aprovechamiento || 0) * 100).toFixed(1);
+        node.className = 'suggestion-card warn';
+        node.innerHTML = `
+          <div class="suggestion-title">Sugerencia de cambio de caja</div>
+          <div>Se recomienda cambiar de ${escapeHtml(s.caja_actual || mejor.tipo_caja)} a ${escapeHtml(s.caja_sugerida)}: +${num(s.delta_cantidad)} piezas y +${pct}% de aprovechamiento.</div>
+          <div>Caja sugerida: <b>${escapeHtml(s.caja_sugerida)}</b> · Variante: <b>${escapeHtml(s.variante_sugerida || 'N/A')}</b></div>
+        `;
+        return;
+      }
+
+      if (desperdicioAlto) {
+        node.className = 'suggestion-card warn';
+        node.innerHTML = `
+          <div class="suggestion-title">Sugerencia de cambio de caja</div>
+          <div>La caja actual cumple, pero tiene desperdicio alto.</div>
+          <div>No se encontró una alternativa mejor que justifique el cambio.</div>
+        `;
+        return;
+      }
+
+      node.className = 'suggestion-card ok';
+      node.innerHTML = `
+        <div class="suggestion-title">Sugerencia de cambio de caja</div>
+        <div>La caja seleccionada ya está en rango saludable de aprovechamiento.</div>
+      `;
     }
 
     const TECH_VIEW = {

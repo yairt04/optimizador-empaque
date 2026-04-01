@@ -19,6 +19,15 @@ function abrirSidebarDemo() {
   SpreadsheetApp.getUi().showSidebar(html);
 }
 
+const UMBRALES_SUGERENCIA_CAJA_ = {
+  aprovechamiento_bajo: 0.72,
+  sobrante_factor_alto: 0.75,
+  mejora_min_cantidad: 1,
+  mejora_min_aprovechamiento: 0.03,
+  mejora_min_sobrante_ratio: 0.10,
+  mejora_min_sobrante_abs_mm: 10
+};
+
 function onEdit(e) {
   try {
     if (!e || !e.range) return;
@@ -122,10 +131,12 @@ function simularSku(codigo) {
 // Función para la web app
 function simularSkuWeb(codigo) {
   const data = simularSku(codigo);
+  const sugerencia = construirSugerenciaCaja_(data.resultados, data.mejor);
   return {
     rollo: data.rollo,
     mejor: data.mejor,
     resultados: data.resultados,
+    sugerencia: sugerencia,
     skus: getSheetObjects_('Rollos').map(r => ({
       codigo: r.codigo,
       descripcion: r.descripcion || ''
@@ -680,4 +691,135 @@ function normalizeKey_(value) {
 function toNumber_(value, fallback) {
   const num = Number(value);
   return isNaN(num) ? fallback : num;
+}
+
+function calcularSobranteTotal_(resultado) {
+  if (!resultado) return 0;
+  return toNumber_(resultado.sobrante_largo_mm, 0) +
+    toNumber_(resultado.sobrante_ancho_mm, 0) +
+    toNumber_(resultado.sobrante_alto_mm, 0);
+}
+
+function detectarDesperdicioAlto_(resultado) {
+  if (!resultado) return false;
+  const umbrales = UMBRALES_SUGERENCIA_CAJA_;
+  const aprovechamiento = toNumber_(resultado.aprovechamiento, 0);
+  const sobranteLargo = toNumber_(resultado.sobrante_largo_mm, 0);
+  const sobranteAncho = toNumber_(resultado.sobrante_ancho_mm, 0);
+  const sobranteAlto = toNumber_(resultado.sobrante_alto_mm, 0);
+  const diametroEfectivo = toNumber_(resultado.diametro_efectivo_mm, 0);
+  const anchoEfectivo = toNumber_(resultado.ancho_efectivo_mm, 0);
+
+  return (
+    aprovechamiento < umbrales.aprovechamiento_bajo ||
+    sobranteLargo > (diametroEfectivo * umbrales.sobrante_factor_alto) ||
+    sobranteAncho > (diametroEfectivo * umbrales.sobrante_factor_alto) ||
+    sobranteAlto > (anchoEfectivo * umbrales.sobrante_factor_alto)
+  );
+}
+
+function esMejoraSuficiente_(actual, candidata) {
+  const umbrales = UMBRALES_SUGERENCIA_CAJA_;
+  const cantidadActual = toNumber_(actual?.cantidad_max, 0);
+  const cantidadCandidata = toNumber_(candidata?.cantidad_max, 0);
+  const aprovechamientoActual = toNumber_(actual?.aprovechamiento, 0);
+  const aprovechamientoCandidata = toNumber_(candidata?.aprovechamiento, 0);
+  const sobranteActual = calcularSobranteTotal_(actual);
+  const sobranteCandidata = calcularSobranteTotal_(candidata);
+
+  const deltaCantidad = cantidadCandidata - cantidadActual;
+  const deltaAprovechamiento = aprovechamientoCandidata - aprovechamientoActual;
+  const deltaSobranteTotal = sobranteActual - sobranteCandidata;
+
+  const mejoraCantidad = deltaCantidad >= umbrales.mejora_min_cantidad;
+  const mejoraAprovechamiento = deltaAprovechamiento >= umbrales.mejora_min_aprovechamiento;
+  const umbralSobrante = Math.max(
+    umbrales.mejora_min_sobrante_abs_mm,
+    sobranteActual * umbrales.mejora_min_sobrante_ratio
+  );
+  const mejoraSobrante = deltaCantidad >= 0 && deltaSobranteTotal >= umbralSobrante;
+
+  let motivo = '';
+  if (mejoraCantidad) {
+    motivo = 'Mejora de cantidad máxima';
+  } else if (mejoraAprovechamiento) {
+    motivo = 'Mejora de aprovechamiento';
+  } else if (mejoraSobrante) {
+    motivo = 'Reducción clara de sobrante total sin empeorar cantidad';
+  }
+
+  return {
+    mejora_suficiente: mejoraCantidad || mejoraAprovechamiento || mejoraSobrante,
+    motivo: motivo,
+    delta_cantidad: deltaCantidad,
+    delta_aprovechamiento: deltaAprovechamiento,
+    delta_sobrante_total: deltaSobranteTotal
+  };
+}
+
+function construirSugerenciaCaja_(resultados, mejorActual) {
+  const actual = mejorActual || null;
+  const desperdicioAlto = detectarDesperdicioAlto_(actual);
+  const base = {
+    hay_sugerencia: false,
+    motivo: desperdicioAlto
+      ? 'No se encontró una alternativa mejor que justifique el cambio.'
+      : 'La caja seleccionada ya está en rango saludable de aprovechamiento.',
+    desperdicio_alto: desperdicioAlto,
+    caja_actual: actual?.tipo_caja || '',
+    caja_sugerida: '',
+    variante_sugerida: '',
+    cantidad_actual: toNumber_(actual?.cantidad_max, 0),
+    cantidad_sugerida: toNumber_(actual?.cantidad_max, 0),
+    aprovechamiento_actual: toNumber_(actual?.aprovechamiento, 0),
+    aprovechamiento_sugerido: toNumber_(actual?.aprovechamiento, 0),
+    delta_cantidad: 0,
+    delta_aprovechamiento: 0,
+    delta_sobrante_total: 0
+  };
+
+  if (!actual || !Array.isArray(resultados) || !resultados.length) {
+    return base;
+  }
+
+  if (!desperdicioAlto) {
+    return base;
+  }
+
+  const viables = resultados.filter(r =>
+    r &&
+    r.estatus === 'OK' &&
+    r.repetible === true &&
+    r.viable_altura === true &&
+    r.tipo_caja !== actual.tipo_caja
+  );
+
+  viables.sort((a, b) => {
+    if (b.cantidad_max !== a.cantidad_max) return b.cantidad_max - a.cantidad_max;
+    if (b.aprovechamiento !== a.aprovechamiento) return b.aprovechamiento - a.aprovechamiento;
+    return calcularSobranteTotal_(a) - calcularSobranteTotal_(b);
+  });
+
+  for (const candidata of viables) {
+    const evaluacion = esMejoraSuficiente_(actual, candidata);
+    if (!evaluacion.mejora_suficiente) continue;
+
+    return {
+      hay_sugerencia: true,
+      motivo: evaluacion.motivo,
+      desperdicio_alto: desperdicioAlto,
+      caja_actual: actual.tipo_caja || '',
+      caja_sugerida: candidata.tipo_caja || '',
+      variante_sugerida: candidata.variante_seleccionada || '',
+      cantidad_actual: toNumber_(actual.cantidad_max, 0),
+      cantidad_sugerida: toNumber_(candidata.cantidad_max, 0),
+      aprovechamiento_actual: toNumber_(actual.aprovechamiento, 0),
+      aprovechamiento_sugerido: toNumber_(candidata.aprovechamiento, 0),
+      delta_cantidad: evaluacion.delta_cantidad,
+      delta_aprovechamiento: evaluacion.delta_aprovechamiento,
+      delta_sobrante_total: evaluacion.delta_sobrante_total
+    };
+  }
+
+  return base;
 }
