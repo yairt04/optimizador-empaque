@@ -1,0 +1,867 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Optimizador de cajas</title>
+  <style>
+    :root{
+      --rb-orange:#ff8500;
+      --rb-black:#000000;
+      --rb-white:#ffffff;
+      --rb-gray:#767676;
+      --rb-navy:#2a2e3a;
+      --rb-border:#d9dde3;
+      --rb-bg:#f5f6f8;
+      --rb-card:#ffffff;
+      --rb-soft:#fafafa;
+    }
+
+    *{box-sizing:border-box}
+
+    html,body{
+      margin:0;
+      padding:0;
+      font-family: Arial, sans-serif;
+      background:var(--rb-bg);
+      color:var(--rb-navy);
+    }
+
+    body{
+      min-width:320px;
+    }
+
+    .app{
+      width:100%;
+      max-width:1600px;
+      margin:0 auto;
+      padding:20px;
+    }
+
+    .header{
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap:16px;
+      margin-bottom:18px;
+    }
+
+    .header h1{
+      margin:0 0 4px 0;
+      font-size:clamp(28px, 4vw, 52px);
+      line-height:1.05;
+      color:var(--rb-navy);
+    }
+
+    .header .tag{
+      color:var(--rb-gray);
+      font-size:14px;
+    }
+
+    .toolbar{
+      background:var(--rb-card);
+      border:1px solid var(--rb-border);
+      border-radius:16px;
+      padding:16px;
+      margin-bottom:16px;
+      display:flex;
+      gap:12px;
+      align-items:stretch;
+      flex-wrap:wrap;
+    }
+
+    .search-wrap{
+      position:relative;
+      flex:1 1 520px;
+      min-width:220px;
+    }
+
+    .search-wrap input{
+      width:100%;
+      min-height:48px;
+      padding:12px 14px;
+      border:1px solid var(--rb-border);
+      border-radius:12px;
+      font-size:14px;
+      outline:none;
+      color:var(--rb-navy);
+      background:#fff;
+    }
+
+    .search-wrap input:focus{
+      border-color:var(--rb-orange);
+      box-shadow:0 0 0 3px rgba(255,133,0,.12);
+    }
+
+    .results-dropdown{
+      position:absolute;
+      top:54px;
+      left:0;
+      right:0;
+      background:#fff;
+      border:1px solid var(--rb-border);
+      border-radius:12px;
+      max-height:260px;
+      overflow:auto;
+      box-shadow:0 10px 25px rgba(0,0,0,.08);
+      display:none;
+      z-index:50;
+    }
+
+    .result-item{
+      padding:10px 12px;
+      border-bottom:1px solid #f0f0f0;
+      cursor:pointer;
+      font-size:14px;
+      line-height:1.35;
+    }
+
+    .result-item:last-child{
+      border-bottom:none;
+    }
+
+    .result-item:hover{
+      background:#fff7ef;
+    }
+
+    .result-item strong{
+      color:var(--rb-black);
+    }
+
+    button{
+      min-height:48px;
+      padding:12px 18px;
+      border:none;
+      border-radius:12px;
+      cursor:pointer;
+      font-weight:700;
+      font-size:14px;
+      transition:.2s ease;
+      white-space:nowrap;
+    }
+
+    .btn-primary{
+      background:var(--rb-orange);
+      color:#fff;
+      flex:0 0 auto;
+    }
+
+    .btn-primary:hover{
+      filter:brightness(.97);
+    }
+
+    .status{
+      color:var(--rb-gray);
+      font-size:13px;
+      margin-bottom:16px;
+      padding:0 2px;
+    }
+
+    .main-grid{
+      display:grid;
+      grid-template-columns:340px minmax(0,1fr);
+      gap:18px;
+      align-items:start;
+    }
+
+    .card{
+      background:var(--rb-card);
+      border:1px solid var(--rb-border);
+      border-radius:18px;
+      padding:18px;
+      min-width:0;
+    }
+
+    .card h3{
+      margin:0 0 12px 0;
+      color:var(--rb-navy);
+      font-size:clamp(20px, 2.2vw, 24px);
+    }
+
+    .muted{
+      color:var(--rb-gray);
+      font-size:13px;
+      line-height:1.4;
+    }
+
+    .summary-lines{
+      font-size:14px;
+      line-height:1.6;
+      margin-bottom:14px;
+      word-break:break-word;
+    }
+
+    .summary-lines b{
+      color:var(--rb-black);
+    }
+
+    .kpi{
+      display:grid;
+      grid-template-columns:repeat(2,minmax(110px,1fr));
+      gap:10px;
+      margin-top:12px;
+    }
+
+    .kpi div{
+      background:var(--rb-soft);
+      border:1px solid var(--rb-border);
+      border-radius:14px;
+      padding:12px;
+      min-height:84px;
+      display:flex;
+      flex-direction:column;
+      justify-content:space-between;
+    }
+
+    .kpi-title{
+      color:var(--rb-gray);
+      font-size:12px;
+      margin-bottom:8px;
+    }
+
+    .kpi-value{
+      color:var(--rb-black);
+      font-size:clamp(22px, 3vw, 28px);
+      font-weight:700;
+      line-height:1.1;
+      word-break:break-word;
+    }
+
+    .kpi-value.small{
+      font-size:clamp(16px, 2.2vw, 20px);
+    }
+
+    .views-grid{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:16px;
+      margin-top:12px;
+      align-items:stretch;
+    }
+
+    .view-card{
+      border:1px solid var(--rb-border);
+      border-radius:16px;
+      background:#fff;
+      padding:12px;
+      min-width:0;
+      display:flex;
+      flex-direction:column;
+    }
+
+    .view-title{
+      font-size:14px;
+      font-weight:700;
+      color:var(--rb-navy);
+      margin-bottom:8px;
+    }
+
+    .svg-wrap{
+      width:100%;
+      overflow:auto;
+      -webkit-overflow-scrolling:touch;
+      border:1px solid #eef1f4;
+      border-radius:14px;
+      background:#fff;
+      padding:8px;
+      flex:1;
+    }
+
+    .svg-wrap svg{
+      display:block;
+      width:100%;
+      height:auto;
+      min-width:320px;
+    }
+
+    .table-card{
+      margin-top:18px;
+    }
+
+    .table-wrap{
+      width:100%;
+      overflow:auto;
+      -webkit-overflow-scrolling:touch;
+      margin-top:12px;
+      border-radius:14px;
+    }
+
+    table{
+      width:100%;
+      min-width:760px;
+      border-collapse:collapse;
+      font-size:13px;
+      background:#fff;
+      overflow:hidden;
+    }
+
+    th, td{
+      border:1px solid #eceef2;
+      padding:10px 8px;
+      text-align:left;
+      vertical-align:middle;
+    }
+
+    th{
+      background:var(--rb-navy);
+      color:#fff;
+      font-weight:700;
+      position:sticky;
+      top:0;
+      z-index:1;
+    }
+
+    tr:nth-child(even) td{
+      background:#fafafa;
+    }
+
+    .pill{
+      display:inline-block;
+      padding:4px 8px;
+      border-radius:999px;
+      font-size:12px;
+      font-weight:700;
+    }
+
+    .pill-ok{
+      background:rgba(255,133,0,.12);
+      color:var(--rb-orange);
+    }
+
+    .foot-note{
+      margin-top:10px;
+      color:var(--rb-gray);
+      font-size:12px;
+    }
+
+    @media (max-width: 1180px){
+      .main-grid{
+        grid-template-columns:1fr;
+      }
+
+      .views-grid{
+        grid-template-columns:1fr;
+      }
+    }
+
+    @media (max-width: 768px){
+      .app{
+        padding:14px;
+      }
+
+      .toolbar{
+        padding:12px;
+      }
+
+      .search-wrap{
+        flex:1 1 100%;
+      }
+
+      .btn-primary{
+        width:100%;
+      }
+
+      .card{
+        padding:14px;
+      }
+
+      .kpi{
+        grid-template-columns:repeat(2, minmax(100px,1fr));
+      }
+
+      .svg-wrap svg{
+        min-width:280px;
+      }
+    }
+
+    @media (max-width: 520px){
+      .header{
+        margin-bottom:14px;
+      }
+
+      .header .tag{
+        font-size:12px;
+      }
+
+      .kpi{
+        grid-template-columns:1fr 1fr;
+      }
+
+      .summary-lines{
+        font-size:13px;
+      }
+
+      .result-item{
+        font-size:13px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="header">
+      <div>
+        <h1>Optimizador de cajas</h1>
+        <div class="tag">Ribetec · simulador de acomodo técnico</div>
+      </div>
+    </div>
+
+    <div class="toolbar">
+      <div class="search-wrap">
+        <input
+          id="skuSearch"
+          type="text"
+          placeholder="Buscar SKU o descripción…"
+          oninput="filtrarSkus()"
+          onfocus="filtrarSkus()"
+          autocomplete="off"
+        />
+        <div id="dropdown" class="results-dropdown"></div>
+      </div>
+
+      <button class="btn-primary" onclick="simular()">Simular</button>
+    </div>
+
+    <div id="estado" class="status">Cargando SKUs…</div>
+
+    <div class="main-grid">
+      <div class="card">
+        <h3>Resumen</h3>
+        <div id="resumen" class="summary-lines muted">Selecciona un SKU.</div>
+        <div id="kpis" class="kpi"></div>
+      </div>
+
+      <div class="card">
+        <h3>Acomodo técnico</h3>
+        <div class="muted">Vista superior y vista lateral de la caja recomendada.</div>
+
+        <div class="views-grid">
+          <div class="view-card">
+            <div class="view-title">Vista superior</div>
+            <div id="layoutTop" class="svg-wrap"></div>
+          </div>
+
+          <div class="view-card">
+            <div class="view-title">Vista lateral</div>
+            <div id="layoutSide" class="svg-wrap"></div>
+          </div>
+        </div>
+
+        <div class="foot-note">
+          El dibujo es técnico y proporcional al acomodo calculado.
+        </div>
+      </div>
+    </div>
+
+    <div class="card table-card">
+      <h3>Comparativo por caja</h3>
+      <div id="tabla"></div>
+    </div>
+  </div>
+
+  <script>
+    let skuCatalogo = [];
+    let skuSeleccionado = null;
+
+    function cargarSkus() {
+      google.script.run
+        .withSuccessHandler(data => {
+          skuCatalogo = data || [];
+          document.getElementById('estado').textContent = 'Listo para buscar.';
+        })
+        .withFailureHandler(err => {
+          document.getElementById('estado').textContent = 'Error cargando SKUs: ' + (err.message || err);
+        })
+        .getSkusWeb();
+    }
+
+    function filtrarSkus() {
+      const input = document.getElementById('skuSearch');
+      const dropdown = document.getElementById('dropdown');
+      const q = (input.value || '').trim().toLowerCase();
+
+      const filtrados = skuCatalogo
+        .filter(item => {
+          const codigo = String(item.codigo || '').toLowerCase();
+          const descripcion = String(item.descripcion || '').toLowerCase();
+          return codigo.includes(q) || descripcion.includes(q);
+        })
+        .slice(0, 20);
+
+      if (!q && !filtrados.length) {
+        dropdown.style.display = 'none';
+        dropdown.innerHTML = '';
+        return;
+      }
+
+      dropdown.innerHTML = filtrados.map(item => `
+        <div class="result-item" onclick="seleccionarSku('${escapeJs(item.codigo)}')">
+          <strong>${escapeHtml(item.codigo)}</strong><br>
+          <span>${escapeHtml(item.descripcion || '')}</span>
+        </div>
+      `).join('');
+
+      dropdown.style.display = filtrados.length ? 'block' : 'none';
+    }
+
+    function seleccionarSku(codigo) {
+      const item = skuCatalogo.find(x => String(x.codigo) === String(codigo));
+      if (!item) return;
+
+      skuSeleccionado = item.codigo;
+      document.getElementById('skuSearch').value =
+        `${item.codigo} - ${item.descripcion || ''}`;
+
+      document.getElementById('dropdown').style.display = 'none';
+    }
+
+    function simular() {
+      if (!skuSeleccionado) {
+        const txt = document.getElementById('skuSearch').value.trim();
+        const exacto = skuCatalogo.find(x => txt.startsWith(String(x.codigo)));
+        if (exacto) skuSeleccionado = exacto.codigo;
+      }
+
+      if (!skuSeleccionado) {
+        document.getElementById('estado').textContent = 'Selecciona un SKU válido.';
+        return;
+      }
+
+      document.getElementById('estado').textContent = 'Calculando…';
+
+      google.script.run
+        .withSuccessHandler(renderResultado)
+        .withFailureHandler(err => {
+          document.getElementById('estado').textContent = 'Error: ' + (err.message || err);
+        })
+        .simularSkuWeb(skuSeleccionado);
+    }
+
+    function renderResultado(data) {
+      const mejor = data.mejor;
+      const rollo = data.rollo;
+
+      document.getElementById('estado').textContent = 'Simulación lista.';
+
+      document.getElementById('resumen').innerHTML = `
+        <b>SKU:</b> ${escapeHtml(rollo.codigo)}<br>
+        <b>Descripción:</b> ${escapeHtml(rollo.descripcion || '')}<br>
+        <b>Caja recomendada:</b> ${escapeHtml(mejor.tipo_caja)}<br>
+        <b>Orientación:</b> ${escapeHtml(mejor.orientacion)}<br>
+        <b>Estatus:</b> <span class="pill pill-ok">${escapeHtml(mejor.estatus)}</span>
+      `;
+
+      document.getElementById('kpis').innerHTML = `
+        <div>
+          <div class="kpi-title">Cantidad máx.</div>
+          <div class="kpi-value">${num(mejor.cantidad_max)}</div>
+        </div>
+        <div>
+          <div class="kpi-title">Niveles</div>
+          <div class="kpi-value">${num(mejor.niveles)}</div>
+        </div>
+        <div>
+          <div class="kpi-title">Piezas largo</div>
+          <div class="kpi-value">${num(mejor.piezas_largo)}</div>
+        </div>
+        <div>
+          <div class="kpi-title">Piezas ancho</div>
+          <div class="kpi-value">${num(mejor.piezas_ancho)}</div>
+        </div>
+        <div>
+          <div class="kpi-title">Diámetro efectivo</div>
+          <div class="kpi-value small">${num(mejor.diametro_efectivo_mm)} mm</div>
+        </div>
+        <div>
+          <div class="kpi-title">Ancho efectivo</div>
+          <div class="kpi-value small">${num(mejor.ancho_efectivo_mm)} mm</div>
+        </div>
+      `;
+
+      document.getElementById('layoutTop').innerHTML = generarSVGTop(mejor);
+      document.getElementById('layoutSide').innerHTML = generarSVGSide(mejor);
+      document.getElementById('tabla').innerHTML = generarTabla(data.resultados);
+    }
+
+    function generarSVGTop(m) {
+      const cajaW = Number(m.largo_caja_mm) || 1;
+      const cajaH = Number(m.ancho_caja_mm) || 1;
+      const diam = Number(m.diametro_efectivo_mm) || 1;
+      const piezasLargo = Number(m.piezas_largo) || 0;
+      const piezasAncho = Number(m.piezas_ancho) || 0;
+      const niveles = Number(m.niveles) || 0;
+      const total = Number(m.cantidad_max) || 0;
+
+      const viewW = 900;
+      const viewH = 700;
+
+      const drawAreaW = 540;
+      const drawAreaH = 470;
+
+      const escala = Math.min(drawAreaW / cajaW, drawAreaH / cajaH);
+
+      const boxPxW = cajaW * escala;
+      const boxPxH = cajaH * escala;
+      const diamPx = diam * escala;
+      const r = diamPx / 2;
+
+      const ox = 90;
+      const oy = 90;
+
+      let circles = '';
+      for (let row = 0; row < piezasAncho; row++) {
+        for (let col = 0; col < piezasLargo; col++) {
+          const cx = ox + r + col * diamPx;
+          const cy = oy + r + row * diamPx;
+
+          circles += `
+            <circle cx="${cx}" cy="${cy}" r="${r}" fill="#ffffff" stroke="#8c8c8c" stroke-width="2"/>
+            <circle cx="${cx}" cy="${cy}" r="${Math.max(r * 0.28, 4)}" fill="#d9d9d9" stroke="#8c8c8c" stroke-width="1.2"/>
+          `;
+        }
+      }
+
+      return `
+        <svg viewBox="0 0 ${viewW} ${viewH}" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
+          <rect x="0" y="0" width="${viewW}" height="${viewH}" fill="#ffffff"/>
+          <text x="48" y="42" font-size="22" font-weight="700" fill="#2a2e3a">Vista superior - ${escapeHtml(m.tipo_caja)}</text>
+
+          <rect x="${ox}" y="${oy}" width="${boxPxW}" height="${boxPxH}" fill="#fbfbfb" stroke="#2a2e3a" stroke-width="4"/>
+          ${circles}
+
+          <line x1="${ox}" y1="${oy + boxPxH + 34}" x2="${ox + boxPxW}" y2="${oy + boxPxH + 34}" stroke="#ff8500" stroke-width="3"/>
+          <text x="${ox + boxPxW / 2}" y="${oy + boxPxH + 26}" text-anchor="middle" font-size="16" fill="#ff8500">
+            ${num(m.largo_caja_mm)} mm largo
+          </text>
+
+          <line x1="${ox + boxPxW + 34}" y1="${oy}" x2="${ox + boxPxW + 34}" y2="${oy + boxPxH}" stroke="#ff8500" stroke-width="3"/>
+          <text x="${ox + boxPxW + 48}" y="${oy + boxPxH / 2}" font-size="16" fill="#ff8500"
+                transform="rotate(90 ${ox + boxPxW + 48} ${oy + boxPxH / 2})">
+            ${num(m.ancho_caja_mm)} mm ancho
+          </text>
+
+          <text x="48" y="628" font-size="15" fill="#2a2e3a">Diámetro efectivo: ${num(m.diametro_efectivo_mm)} mm</text>
+          <text x="48" y="654" font-size="15" fill="#2a2e3a">Piezas por capa: ${piezasLargo} × ${piezasAncho} = ${piezasLargo * piezasAncho}</text>
+          <text x="530" y="628" font-size="15" fill="#2a2e3a">Niveles: ${niveles}</text>
+          <text x="530" y="654" font-size="18" font-weight="700" fill="#ff8500">Total: ${total} rollos</text>
+        </svg>
+      `;
+    }
+
+    function generarSVGSide(m) {
+      const cajaBase = Number(m.largo_caja_mm || 1);
+      const niveles = Number(m.niveles || 0);
+      const piezasLargo = Number(m.piezas_largo || 0);
+      const piezasAncho = Number(m.piezas_ancho || 0);
+      const piezasPorCapa = piezasLargo * piezasAncho;
+
+      const diametro = Number(m.diametro_efectivo_mm || 1);
+      const altoRollo = Number(m.ancho_efectivo_mm || 1);
+      const cajaAlto = Number(m.alto_caja_mm || m.alto_total_mm || (altoRollo * niveles));
+
+      const viewW = 900;
+      const viewH = 700;
+
+      const drawAreaW = 560;
+      const drawAreaH = 430;
+
+      const escalaCaja = Math.min(drawAreaW / cajaBase, drawAreaH / cajaAlto);
+
+      const boxPxW = cajaBase * escalaCaja;
+      const boxPxH = cajaAlto * escalaCaja;
+
+      const ox = 90;
+      const oy = 110;
+
+      const columnasVisibles = Math.max(1, piezasLargo);
+
+      let rollPxW = diametro * escalaCaja;
+      let rollPxH = altoRollo * escalaCaja;
+
+      const minRollW = 72;
+      const minRollH = 34;
+      rollPxW = Math.max(rollPxW, minRollW);
+      rollPxH = Math.max(rollPxH, minRollH);
+
+      const gapXBase = 18;
+      const requiredW = (columnasVisibles * rollPxW) + ((columnasVisibles + 1) * gapXBase);
+
+      if (requiredW > boxPxW) {
+        const usableW = boxPxW - ((columnasVisibles + 1) * 10);
+        rollPxW = Math.max(48, usableW / columnasVisibles);
+      }
+
+      const gapX = (boxPxW - (columnasVisibles * rollPxW)) / (columnasVisibles + 1);
+      const totalStackH = niveles * rollPxH;
+      const bottomPadding = Math.max(10, (boxPxH - totalStackH) / 2);
+
+      let etiquetasNivel = '';
+      for (let nivel = 0; nivel < niveles; nivel++) {
+        const y = oy + boxPxH - bottomPadding - ((nivel + 1) * rollPxH) + (rollPxH / 2);
+        etiquetasNivel += `
+          <text x="${ox - 12}" y="${y + 4}" text-anchor="end" font-size="11" fill="#667085">
+            N${nivel + 1}
+          </text>
+        `;
+      }
+
+      let columnas = '';
+      for (let col = 0; col < columnasVisibles; col++) {
+        const x = ox + gapX + col * (rollPxW + gapX);
+
+        for (let nivel = 0; nivel < niveles; nivel++) {
+          const y = oy + boxPxH - bottomPadding - ((nivel + 1) * rollPxH);
+          columnas += dibujarRolloLateral(x, y, rollPxW, rollPxH);
+        }
+      }
+
+      const notaProfundidad = piezasAncho > 1
+        ? `Cada columna visible representa ${piezasAncho} rollos al fondo`
+        : `Cada columna visible representa 1 rollo`;
+
+      return `
+        <svg viewBox="0 0 ${viewW} ${viewH}" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
+          <defs>
+            <linearGradient id="rollBodySide" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stop-color="#ececec"/>
+              <stop offset="18%" stop-color="#ffffff"/>
+              <stop offset="55%" stop-color="#fafafa"/>
+              <stop offset="85%" stop-color="#e9e9e9"/>
+              <stop offset="100%" stop-color="#dddddd"/>
+            </linearGradient>
+
+            <linearGradient id="rollTopSide" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#ffffff"/>
+              <stop offset="100%" stop-color="#ededed"/>
+            </linearGradient>
+
+            <linearGradient id="rollBottomSide" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#e7e7e7"/>
+              <stop offset="100%" stop-color="#d9d9d9"/>
+            </linearGradient>
+
+            <filter id="shadowSide" x="-20%" y="-20%" width="140%" height="140%">
+              <feDropShadow dx="0.8" dy="1.2" stdDeviation="1.2" flood-color="#000000" flood-opacity="0.12"/>
+            </filter>
+          </defs>
+
+          <rect x="0" y="0" width="${viewW}" height="${viewH}" fill="#ffffff"/>
+          <text x="48" y="42" font-size="22" font-weight="700" fill="#2a2e3a">Vista lateral - ${escapeHtml(m.tipo_caja)}</text>
+
+          <rect x="${ox}" y="${oy}" width="${boxPxW}" height="${boxPxH}" fill="#fbfbfb" stroke="#2a2e3a" stroke-width="4"/>
+
+          ${etiquetasNivel}
+          ${columnas}
+
+          <line x1="${ox}" y1="${oy + boxPxH + 34}" x2="${ox + boxPxW}" y2="${oy + boxPxH + 34}" stroke="#ff8500" stroke-width="3"/>
+          <text x="${ox + boxPxW / 2}" y="${oy + boxPxH + 26}" text-anchor="middle" font-size="16" fill="#ff8500">
+            ${num(m.largo_caja_mm)} mm base
+          </text>
+
+          <line x1="${ox + boxPxW + 34}" y1="${oy}" x2="${ox + boxPxW + 34}" y2="${oy + boxPxH}" stroke="#ff8500" stroke-width="3"/>
+          <text x="${ox + boxPxW + 48}" y="${oy + boxPxH / 2}" font-size="16" fill="#ff8500"
+                transform="rotate(90 ${ox + boxPxW + 48} ${oy + boxPxH / 2})">
+            ${num(cajaAlto)} mm alto caja
+          </text>
+
+          <text x="48" y="628" font-size="15" fill="#2a2e3a">Ancho efectivo del rollo: ${num(m.ancho_efectivo_mm)} mm</text>
+          <text x="48" y="654" font-size="15" fill="#2a2e3a">Diámetro efectivo: ${num(m.diametro_efectivo_mm)} mm</text>
+          <text x="530" y="628" font-size="15" fill="#2a2e3a">Niveles apilados: ${niveles}</text>
+          <text x="530" y="654" font-size="18" font-weight="700" fill="#ff8500">Piezas por capa: ${piezasPorCapa}</text>
+          <text x="48" y="680" font-size="12" fill="#767676">${escapeHtml(notaProfundidad)}</text>
+        </svg>
+      `;
+    }
+
+    function dibujarRolloLateral(x, y, w, h) {
+      const elH = Math.max(10, Math.min(16, h * 0.26));
+      const bodyY = y + (elH / 2);
+      const bodyH = Math.max(8, h - elH);
+      const cx = x + (w / 2);
+      const topCy = y + (elH / 2);
+      const bottomCy = y + bodyY - y + bodyH;
+
+      const coreRx = Math.max(6, w * 0.14);
+      const coreRy = Math.max(2.8, elH * 0.22);
+
+      return `
+        <g filter="url(#shadowSide)">
+          <rect x="${x}" y="${bodyY}" width="${w}" height="${bodyH}" fill="url(#rollBodySide)" stroke="#cfcfcf" stroke-width="1.2"/>
+          <ellipse cx="${cx}" cy="${bottomCy}" rx="${w/2}" ry="${elH/2}" fill="url(#rollBottomSide)" stroke="#c9c9c9" stroke-width="1.2"/>
+          <ellipse cx="${cx}" cy="${topCy}" rx="${w/2}" ry="${elH/2}" fill="url(#rollTopSide)" stroke="#c9c9c9" stroke-width="1.2"/>
+          <ellipse cx="${cx}" cy="${topCy}" rx="${coreRx}" ry="${coreRy}" fill="#b08d57" stroke="#8f7248" stroke-width="0.8"/>
+          <line x1="${x + w*0.15}" y1="${bodyY + 1}" x2="${x + w*0.15}" y2="${bodyY + bodyH - 2}" stroke="#ffffff" stroke-opacity="0.75" stroke-width="1"/>
+          <line x1="${x + w*0.85}" y1="${bodyY + 1}" x2="${x + w*0.85}" y2="${bodyY + bodyH - 2}" stroke="#d9d9d9" stroke-width="1"/>
+        </g>
+      `;
+    }
+
+    function generarTabla(rows) {
+      const body = (rows || []).map(r => `
+        <tr>
+          <td>${escapeHtml(r.tipo_caja)}</td>
+          <td>${num(r.piezas_largo)}</td>
+          <td>${num(r.piezas_ancho)}</td>
+          <td>${num(r.niveles)}</td>
+          <td>${num(r.cantidad_max)}</td>
+          <td>${(Number(r.aprovechamiento || 0) * 100).toFixed(2)}%</td>
+          <td><span class="pill pill-ok">${escapeHtml(r.estatus || '')}</span></td>
+        </tr>
+      `).join('');
+
+      return `
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Caja</th>
+                <th>Piezas largo</th>
+                <th>Piezas ancho</th>
+                <th>Niveles</th>
+                <th>Total</th>
+                <th>Aprovechamiento</th>
+                <th>Estatus</th>
+              </tr>
+            </thead>
+            <tbody>${body}</tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    function num(v) {
+      if (v === null || v === undefined || v === '') return '';
+      const n = Number(v);
+      return Number.isFinite(n)
+        ? n.toLocaleString('es-MX', { maximumFractionDigits: 2 })
+        : escapeHtml(v);
+    }
+
+    function escapeHtml(str) {
+      return String(str ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
+    }
+
+    function escapeJs(str) {
+      return String(str ?? '')
+        .replaceAll("\\", "\\\\")
+        .replaceAll("'", "\\'");
+    }
+
+    document.addEventListener('click', function(e) {
+      const dropdown = document.getElementById('dropdown');
+      const search = document.getElementById('skuSearch');
+      if (dropdown && search && !dropdown.contains(e.target) && e.target !== search) {
+        dropdown.style.display = 'none';
+      }
+    });
+
+    cargarSkus();
+  </script>
+</body>
+</html>
