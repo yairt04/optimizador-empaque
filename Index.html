@@ -8,14 +8,14 @@
   <style>
     :root{
       --rb-orange:#ff8500;
-      --rb-black:#000000;
-      --rb-white:#ffffff;
-      --rb-gray:#767676;
-      --rb-navy:#2a2e3a;
-      --rb-border:#d9dde3;
-      --rb-bg:#f5f6f8;
+      --rb-black:#0b0f14;
+      --rb-gray:#5c6776;
+      --rb-navy:#1e2733;
+      --rb-border:#d7dee7;
+      --rb-bg:#f2f4f7;
       --rb-card:#ffffff;
-      --rb-soft:#fafafa;
+      --rb-soft:#f7f9fc;
+      --rb-line:#c7d0dc;
     }
 
     *{box-sizing:border-box}
@@ -23,69 +23,61 @@
     html,body{
       margin:0;
       padding:0;
-      font-family: Arial, sans-serif;
+      font-family:Arial,sans-serif;
       background:var(--rb-bg);
       color:var(--rb-navy);
     }
 
-    body{
-      min-width:320px;
-    }
+    body{min-width:320px}
 
+    /* =====================
+       1) Layout principal
+       ===================== */
     .app{
       width:100%;
-      max-width:1600px;
+      max-width:1550px;
       margin:0 auto;
-      padding:20px;
+      padding:14px;
     }
 
-    .header{
-      display:flex;
-      align-items:flex-start;
-      justify-content:space-between;
-      gap:16px;
-      margin-bottom:18px;
-    }
+    .header{margin-bottom:10px}
 
     .header h1{
-      margin:0 0 4px 0;
-      font-size:clamp(28px, 4vw, 52px);
-      line-height:1.05;
-      color:var(--rb-navy);
+      margin:0;
+      font-size:clamp(28px,3.5vw,44px);
+      line-height:1.03;
+      letter-spacing:-.01em;
     }
 
     .header .tag{
       color:var(--rb-gray);
-      font-size:14px;
+      font-size:12px;
+      margin-top:2px;
     }
 
     .toolbar{
       background:var(--rb-card);
       border:1px solid var(--rb-border);
-      border-radius:16px;
-      padding:16px;
-      margin-bottom:16px;
+      border-radius:12px;
+      padding:10px;
+      margin-bottom:10px;
       display:flex;
-      gap:12px;
+      gap:8px;
       align-items:stretch;
       flex-wrap:wrap;
     }
 
-    .search-wrap{
-      position:relative;
-      flex:1 1 520px;
-      min-width:220px;
-    }
+    .search-wrap{position:relative;flex:1 1 520px;min-width:220px}
 
     .search-wrap input{
       width:100%;
-      min-height:48px;
-      padding:12px 14px;
+      min-height:42px;
+      padding:9px 12px;
       border:1px solid var(--rb-border);
-      border-radius:12px;
+      border-radius:9px;
       font-size:14px;
-      outline:none;
       color:var(--rb-navy);
+      outline:none;
       background:#fff;
     }
 
@@ -96,12 +88,12 @@
 
     .results-dropdown{
       position:absolute;
-      top:54px;
+      top:46px;
       left:0;
       right:0;
       background:#fff;
       border:1px solid var(--rb-border);
-      border-radius:12px;
+      border-radius:10px;
       max-height:260px;
       overflow:auto;
       box-shadow:0 10px 25px rgba(0,0,0,.08);
@@ -109,302 +101,158 @@
       z-index:50;
     }
 
-    .result-item{
-      padding:10px 12px;
-      border-bottom:1px solid #f0f0f0;
-      cursor:pointer;
-      font-size:14px;
-      line-height:1.35;
-    }
+    .result-item{padding:9px 10px;border-bottom:1px solid #f0f2f6;cursor:pointer;font-size:13px;line-height:1.3}
+    .result-item:last-child{border-bottom:none}
+    .result-item:hover{background:#fff7ef}
 
-    .result-item:last-child{
-      border-bottom:none;
-    }
+    button{min-height:42px;padding:9px 14px;border:none;border-radius:9px;cursor:pointer;font-weight:700;font-size:13px;white-space:nowrap}
+    .btn-primary{background:var(--rb-orange);color:#fff}
+    .btn-primary:hover{filter:brightness(.97)}
 
-    .result-item:hover{
-      background:#fff7ef;
-    }
-
-    .result-item strong{
-      color:var(--rb-black);
-    }
-
-    button{
-      min-height:48px;
-      padding:12px 18px;
-      border:none;
-      border-radius:12px;
-      cursor:pointer;
-      font-weight:700;
-      font-size:14px;
-      transition:.2s ease;
-      white-space:nowrap;
-    }
-
-    .btn-primary{
-      background:var(--rb-orange);
-      color:#fff;
-      flex:0 0 auto;
-    }
-
-    .btn-primary:hover{
-      filter:brightness(.97);
-    }
-
-    .status{
-      color:var(--rb-gray);
-      font-size:13px;
-      margin-bottom:16px;
-      padding:0 2px;
-    }
+    .status{font-size:12px;color:var(--rb-gray);margin-bottom:10px;padding:0 2px}
 
     .main-grid{
       display:grid;
-      grid-template-columns:340px minmax(0,1fr);
-      gap:18px;
+      grid-template-columns:290px minmax(0,1fr);
+      gap:10px;
       align-items:start;
     }
 
-    .card{
+    .panel{
       background:var(--rb-card);
       border:1px solid var(--rb-border);
-      border-radius:18px;
-      padding:18px;
+      border-radius:12px;
       min-width:0;
     }
 
-    .card h3{
-      margin:0 0 12px 0;
-      color:var(--rb-navy);
-      font-size:clamp(20px, 2.2vw, 24px);
-    }
+    /* =====================
+       2) Panel de resumen
+       ===================== */
+    .summary-panel{padding:10px;display:flex;flex-direction:column;gap:8px;position:sticky;top:10px}
 
-    .muted{
-      color:var(--rb-gray);
-      font-size:13px;
-      line-height:1.4;
-    }
+    .panel-title{margin:0;font-size:15px;color:var(--rb-navy);font-weight:700;letter-spacing:.01em}
 
     .summary-lines{
-      font-size:14px;
-      line-height:1.6;
-      margin-bottom:14px;
+      font-size:12px;
+      line-height:1.35;
       word-break:break-word;
+      border-bottom:1px solid #edf1f6;
+      padding-bottom:8px;
+      margin:0;
     }
 
-    .summary-lines b{
-      color:var(--rb-black);
+    .summary-lines .row{
+      display:grid;
+      grid-template-columns:86px 1fr;
+      gap:6px;
+      padding:2px 0;
     }
+
+    .summary-lines .row b{color:#111827;font-weight:700}
+
+    .pill{display:inline-block;padding:2px 7px;border-radius:999px;font-size:11px;font-weight:700;vertical-align:middle}
+    .pill-ok{background:rgba(255,133,0,.12);color:var(--rb-orange)}
 
     .kpi{
       display:grid;
-      grid-template-columns:repeat(2,minmax(110px,1fr));
-      gap:10px;
-      margin-top:12px;
+      grid-template-columns:repeat(2,minmax(0,1fr));
+      gap:6px;
     }
 
-    .kpi div{
+    .kpi-cell{
       background:var(--rb-soft);
-      border:1px solid var(--rb-border);
-      border-radius:14px;
-      padding:12px;
-      min-height:84px;
+      border:1px solid #e8edf4;
+      border-radius:9px;
+      padding:7px 8px;
+      min-height:58px;
       display:flex;
       flex-direction:column;
       justify-content:space-between;
     }
 
-    .kpi-title{
-      color:var(--rb-gray);
-      font-size:12px;
+    .kpi-title{font-size:11px;color:var(--rb-gray);line-height:1.15}
+    .kpi-value{font-size:19px;font-weight:700;line-height:1.05;color:var(--rb-black)}
+    .kpi-value.small{font-size:14px}
+
+    /* =====================
+       3) Render técnico
+       ===================== */
+    .tech-panel{padding:10px 10px 12px}
+
+    .tech-head{
+      display:flex;
+      justify-content:space-between;
+      align-items:flex-end;
+      gap:10px;
       margin-bottom:8px;
+      padding-bottom:7px;
+      border-bottom:1px solid #edf1f6;
     }
 
-    .kpi-value{
-      color:var(--rb-black);
-      font-size:clamp(22px, 3vw, 28px);
-      font-weight:700;
-      line-height:1.1;
-      word-break:break-word;
-    }
-
-    .kpi-value.small{
-      font-size:clamp(16px, 2.2vw, 20px);
-    }
+    .tech-sub{color:var(--rb-gray);font-size:12px}
 
     .views-grid{
       display:grid;
       grid-template-columns:1fr 1fr;
-      gap:16px;
-      margin-top:12px;
+      gap:8px;
       align-items:stretch;
+      min-height:470px;
     }
 
-    .view-card{
-      border:1px solid var(--rb-border);
-      border-radius:16px;
-      background:#fff;
-      padding:12px;
-      min-width:0;
-      display:flex;
-      flex-direction:column;
-    }
-
-    .view-title{
-      font-size:14px;
-      font-weight:700;
-      color:var(--rb-navy);
-      margin-bottom:8px;
-    }
+    .tech-view{display:flex;flex-direction:column;min-width:0}
+    .view-title{font-size:12px;font-weight:700;color:#2d3a4a;margin:0 0 4px 2px;letter-spacing:.015em}
 
     .svg-wrap{
       width:100%;
-      overflow:auto;
-      -webkit-overflow-scrolling:touch;
-      border:1px solid #e7eaf0;
-      border-radius:12px;
-      background:#fcfdff;
-      padding:10px;
       flex:1;
-    }
-
-    .svg-wrap svg{
-      display:block;
-      width:100%;
-      height:auto;
-      min-width:300px;
-    }
-
-    .table-card{
-      margin-top:18px;
-    }
-
-    .table-wrap{
-      width:100%;
+      border:1px solid #e2e8f0;
+      border-radius:10px;
+      background:#fcfdff;
       overflow:auto;
       -webkit-overflow-scrolling:touch;
-      margin-top:12px;
-      border-radius:14px;
+      padding:4px;
     }
 
-    table{
-      width:100%;
-      min-width:760px;
-      border-collapse:collapse;
-      font-size:13px;
-      background:#fff;
-      overflow:hidden;
-    }
+    .svg-wrap svg{display:block;width:100%;height:auto;min-width:280px}
 
-    th, td{
-      border:1px solid #eceef2;
-      padding:10px 8px;
-      text-align:left;
-      vertical-align:middle;
-    }
+    .foot-note{margin-top:6px;color:var(--rb-gray);font-size:11px}
 
-    th{
-      background:var(--rb-navy);
-      color:#fff;
-      font-weight:700;
-      position:sticky;
-      top:0;
-      z-index:1;
-    }
+    .table-card{margin-top:10px;padding:10px}
+    .table-card h3{margin:0 0 6px 0;font-size:15px}
+    .table-wrap{width:100%;overflow:auto;border-radius:10px;border:1px solid #e6ebf2}
 
-    tr:nth-child(even) td{
-      background:#fafafa;
-    }
+    table{width:100%;min-width:760px;border-collapse:collapse;font-size:12px;background:#fff}
+    th,td{border:1px solid #edf1f5;padding:8px 7px;text-align:left;vertical-align:middle}
+    th{background:#1f2937;color:#fff;font-weight:700;position:sticky;top:0;z-index:1}
+    tr:nth-child(even) td{background:#fafbfd}
 
-    .pill{
-      display:inline-block;
-      padding:4px 8px;
-      border-radius:999px;
-      font-size:12px;
-      font-weight:700;
-    }
-
-    .pill-ok{
-      background:rgba(255,133,0,.12);
-      color:var(--rb-orange);
-    }
-
-    .foot-note{
-      margin-top:10px;
-      color:var(--rb-gray);
-      font-size:12px;
-    }
-
+    /* =====================
+       4) Responsivo
+       ===================== */
     @media (max-width: 1180px){
-      .main-grid{
-        grid-template-columns:1fr;
-      }
-
-      .views-grid{
-        grid-template-columns:1fr;
-      }
+      .main-grid{grid-template-columns:1fr}
+      .summary-panel{position:static}
+      .views-grid{grid-template-columns:1fr}
     }
 
     @media (max-width: 768px){
-      .app{
-        padding:14px;
-      }
-
-      .toolbar{
-        padding:12px;
-      }
-
-      .search-wrap{
-        flex:1 1 100%;
-      }
-
-      .btn-primary{
-        width:100%;
-      }
-
-      .card{
-        padding:14px;
-      }
-
-      .kpi{
-        grid-template-columns:repeat(2, minmax(100px,1fr));
-      }
-
-      .svg-wrap svg{
-        min-width:280px;
-      }
-    }
-
-    @media (max-width: 520px){
-      .header{
-        margin-bottom:14px;
-      }
-
-      .header .tag{
-        font-size:12px;
-      }
-
-      .kpi{
-        grid-template-columns:1fr 1fr;
-      }
-
-      .summary-lines{
-        font-size:13px;
-      }
-
-      .result-item{
-        font-size:13px;
-      }
+      .app{padding:10px}
+      .toolbar{padding:8px}
+      .search-wrap{flex:1 1 100%}
+      .btn-primary{width:100%}
+      .summary-lines .row{grid-template-columns:78px 1fr}
+      .kpi-value{font-size:17px}
+      .kpi-value.small{font-size:13px}
+      .views-grid{min-height:unset}
+      .svg-wrap svg{min-width:260px}
     }
   </style>
 </head>
 <body>
   <div class="app">
     <div class="header">
-      <div>
-        <h1>Optimizador de cajas</h1>
-        <div class="tag">Ribetec · simulador de acomodo técnico</div>
-      </div>
+      <h1>Optimizador de cajas</h1>
+      <div class="tag">Ribetec · simulador de acomodo técnico</div>
     </div>
 
     <div class="toolbar">
@@ -419,42 +267,40 @@
         />
         <div id="dropdown" class="results-dropdown"></div>
       </div>
-
       <button class="btn-primary" onclick="simular()">Simular</button>
     </div>
 
     <div id="estado" class="status">Cargando SKUs…</div>
 
     <div class="main-grid">
-      <div class="card">
-        <h3>Resumen</h3>
-        <div id="resumen" class="summary-lines muted">Selecciona un SKU.</div>
+      <aside class="panel summary-panel">
+        <h3 class="panel-title">Resumen técnico</h3>
+        <div id="resumen" class="summary-lines">Selecciona un SKU.</div>
         <div id="kpis" class="kpi"></div>
-      </div>
+      </aside>
 
-      <div class="card">
-        <h3>Acomodo técnico</h3>
-        <div class="muted">Vista superior y vista lateral de la caja recomendada.</div>
+      <section class="panel tech-panel">
+        <div class="tech-head">
+          <h3 class="panel-title">Acomodo técnico</h3>
+          <div class="tech-sub">Vista superior y lateral proporcional</div>
+        </div>
 
         <div class="views-grid">
-          <div class="view-card">
-            <div class="view-title">Vista superior</div>
+          <div class="tech-view">
+            <div class="view-title">VISTA SUPERIOR</div>
             <div id="layoutTop" class="svg-wrap"></div>
           </div>
-
-          <div class="view-card">
-            <div class="view-title">Vista lateral</div>
+          <div class="tech-view">
+            <div class="view-title">VISTA LATERAL</div>
             <div id="layoutSide" class="svg-wrap"></div>
           </div>
         </div>
 
-        <div class="foot-note">
-          El dibujo es técnico y proporcional al acomodo calculado.
-        </div>
-      </div>
+        <div class="foot-note">Representación técnica simplificada con medidas útiles de caja.</div>
+      </section>
     </div>
 
-    <div class="card table-card">
+    <div class="panel table-card">
       <h3>Comparativo por caja</h3>
       <div id="tabla"></div>
     </div>
@@ -545,35 +391,35 @@
       document.getElementById('estado').textContent = 'Simulación lista.';
 
       document.getElementById('resumen').innerHTML = `
-        <b>SKU:</b> ${escapeHtml(rollo.codigo)}<br>
-        <b>Descripción:</b> ${escapeHtml(rollo.descripcion || '')}<br>
-        <b>Caja recomendada:</b> ${escapeHtml(mejor.tipo_caja)}<br>
-        <b>Orientación:</b> ${escapeHtml(mejor.orientacion)}<br>
-        <b>Estatus:</b> <span class="pill pill-ok">${escapeHtml(mejor.estatus)}</span>
+        <div class="row"><b>SKU</b><span>${escapeHtml(rollo.codigo)}</span></div>
+        <div class="row"><b>Desc.</b><span>${escapeHtml(rollo.descripcion || '')}</span></div>
+        <div class="row"><b>Caja</b><span>${escapeHtml(mejor.tipo_caja)}</span></div>
+        <div class="row"><b>Orienta.</b><span>${escapeHtml(mejor.orientacion)}</span></div>
+        <div class="row"><b>Estatus</b><span class="pill pill-ok">${escapeHtml(mejor.estatus)}</span></div>
       `;
 
       document.getElementById('kpis').innerHTML = `
-        <div>
+        <div class="kpi-cell">
           <div class="kpi-title">Cantidad máx.</div>
           <div class="kpi-value">${num(mejor.cantidad_max)}</div>
         </div>
-        <div>
+        <div class="kpi-cell">
           <div class="kpi-title">Niveles</div>
           <div class="kpi-value">${num(mejor.niveles)}</div>
         </div>
-        <div>
+        <div class="kpi-cell">
           <div class="kpi-title">Piezas largo</div>
           <div class="kpi-value">${num(mejor.piezas_largo)}</div>
         </div>
-        <div>
+        <div class="kpi-cell">
           <div class="kpi-title">Piezas ancho</div>
           <div class="kpi-value">${num(mejor.piezas_ancho)}</div>
         </div>
-        <div>
-          <div class="kpi-title">Diámetro efectivo</div>
+        <div class="kpi-cell">
+          <div class="kpi-title">Ø efectivo</div>
           <div class="kpi-value small">${num(mejor.diametro_efectivo_mm)} mm</div>
         </div>
-        <div>
+        <div class="kpi-cell">
           <div class="kpi-title">Ancho efectivo</div>
           <div class="kpi-value small">${num(mejor.ancho_efectivo_mm)} mm</div>
         </div>
@@ -586,11 +432,11 @@
 
     const TECH_VIEW = {
       width: 920,
-      height: 680,
-      marginTop: 78,
-      marginRight: 134,
-      marginBottom: 136,
-      marginLeft: 88
+      height: 640,
+      marginTop: 52,
+      marginRight: 96,
+      marginBottom: 88,
+      marginLeft: 68
     };
 
     function buildTechnicalCanvas(drawMmW, drawMmH) {
@@ -601,18 +447,17 @@
       const boxH = drawMmH * scale;
       const ox = TECH_VIEW.marginLeft + ((drawW - boxW) / 2);
       const oy = TECH_VIEW.marginTop + ((drawH - boxH) / 2);
-
       return { scale, boxW, boxH, ox, oy };
     }
 
     function generateBoxGuides({ ox, oy, boxW, boxH, hLabel, vLabel }) {
-      const xDimY = oy + boxH + 30;
-      const yDimX = ox + boxW + 30;
+      const xDimY = oy + boxH + 20;
+      const yDimX = ox + boxW + 20;
       return `
-        <line x1="${ox}" y1="${xDimY}" x2="${ox + boxW}" y2="${xDimY}" stroke="#ff8500" stroke-width="2"/>
-        <text x="${ox + boxW / 2}" y="${xDimY - 8}" text-anchor="middle" font-size="14" fill="#ff8500">${escapeHtml(hLabel)}</text>
-        <line x1="${yDimX}" y1="${oy}" x2="${yDimX}" y2="${oy + boxH}" stroke="#ff8500" stroke-width="2"/>
-        <text x="${yDimX + 16}" y="${oy + boxH / 2}" font-size="14" fill="#ff8500" transform="rotate(90 ${yDimX + 16} ${oy + boxH / 2})">${escapeHtml(vLabel)}</text>
+        <line x1="${ox}" y1="${xDimY}" x2="${ox + boxW}" y2="${xDimY}" stroke="#ff8500" stroke-width="1.8"/>
+        <text x="${ox + boxW / 2}" y="${xDimY - 6}" text-anchor="middle" font-size="12" fill="#ff8500">${escapeHtml(hLabel)}</text>
+        <line x1="${yDimX}" y1="${oy}" x2="${yDimX}" y2="${oy + boxH}" stroke="#ff8500" stroke-width="1.8"/>
+        <text x="${yDimX + 14}" y="${oy + boxH / 2}" font-size="12" fill="#ff8500" transform="rotate(90 ${yDimX + 14} ${oy + boxH / 2})">${escapeHtml(vLabel)}</text>
       `;
     }
 
@@ -622,21 +467,21 @@
       const diam = Number(m.diametro_efectivo_mm) || 1;
       const piezasLargo = Math.max(0, Number(m.piezas_largo) || 0);
       const piezasAncho = Math.max(0, Number(m.piezas_ancho) || 0);
-      const niveles = Number(m.niveles) || 0;
       const total = Number(m.cantidad_max) || 0;
+      const niveles = Number(m.niveles) || 0;
       const ctx = buildTechnicalCanvas(cajaW, cajaH);
 
       const diamPx = diam * ctx.scale;
       const r = diamPx / 2;
-
       let circles = '';
+
       for (let row = 0; row < piezasAncho; row++) {
         for (let col = 0; col < piezasLargo; col++) {
           const cx = ctx.ox + r + col * diamPx;
           const cy = ctx.oy + r + row * diamPx;
           circles += `
-            <circle cx="${cx}" cy="${cy}" r="${r}" fill="#ffffff" stroke="#5a6573" stroke-width="1.5"/>
-            <circle cx="${cx}" cy="${cy}" r="${Math.max(r * 0.24, 3)}" fill="#eef1f5" stroke="#5a6573" stroke-width="1"/>
+            <circle cx="${cx}" cy="${cy}" r="${r}" fill="#ffffff" stroke="#4f5f70" stroke-width="1.2"/>
+            <circle cx="${cx}" cy="${cy}" r="${Math.max(r * 0.22, 2.6)}" fill="#edf2f7" stroke="#4f5f70" stroke-width="0.8"/>
           `;
         }
       }
@@ -644,8 +489,7 @@
       return `
         <svg viewBox="0 0 ${TECH_VIEW.width} ${TECH_VIEW.height}" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
           <rect x="0" y="0" width="${TECH_VIEW.width}" height="${TECH_VIEW.height}" fill="#ffffff"/>
-          <text x="46" y="44" font-size="20" font-weight="700" fill="#2a2e3a">Vista superior - ${escapeHtml(m.tipo_caja)}</text>
-          <rect x="${ctx.ox}" y="${ctx.oy}" width="${ctx.boxW}" height="${ctx.boxH}" fill="#f9fbfd" stroke="#2a2e3a" stroke-width="2.5"/>
+          <rect x="${ctx.ox}" y="${ctx.oy}" width="${ctx.boxW}" height="${ctx.boxH}" fill="#f8fbff" stroke="#1e2937" stroke-width="2"/>
           ${circles}
           ${generateBoxGuides({
             ox: ctx.ox,
@@ -655,10 +499,10 @@
             hLabel: `${num(m.largo_caja_mm)} mm largo`,
             vLabel: `${num(m.ancho_caja_mm)} mm ancho`
           })}
-          <text x="46" y="610" font-size="14" fill="#2a2e3a">Diámetro efectivo: ${num(m.diametro_efectivo_mm)} mm</text>
-          <text x="46" y="634" font-size="14" fill="#2a2e3a">Piezas por capa: ${piezasLargo} × ${piezasAncho} = ${piezasLargo * piezasAncho}</text>
-          <text x="540" y="610" font-size="14" fill="#2a2e3a">Niveles: ${niveles}</text>
-          <text x="540" y="634" font-size="16" font-weight="700" fill="#ff8500">Total: ${total} rollos</text>
+          <text x="22" y="26" font-size="13" font-weight="700" fill="#1f2937">${escapeHtml(m.tipo_caja)} · vista superior</text>
+          <text x="22" y="604" font-size="12" fill="#3b4654">Capa: ${piezasLargo} × ${piezasAncho} (${piezasLargo * piezasAncho})</text>
+          <text x="330" y="604" font-size="12" fill="#3b4654">Niveles: ${niveles}</text>
+          <text x="452" y="604" font-size="12" fill="#ff8500" font-weight="700">Total: ${total} rollos</text>
         </svg>
       `;
     }
@@ -684,30 +528,29 @@
       const offsetX = ctx.ox + ((ctx.boxW - gridW) / 2);
       const offsetY = ctx.oy + ctx.boxH - gridH;
 
-      let cells = '';
+      let stacks = '';
       for (let nivel = 0; nivel < niveles; nivel++) {
         const y = offsetY + (rows - 1 - nivel) * rollH;
-        const tagY = y + (rollH / 2) + 4;
-        cells += `<text x="${ctx.ox - 10}" y="${tagY}" text-anchor="end" font-size="11" fill="#667085">N${nivel + 1}</text>`;
+        const tagY = y + (rollH / 2) + 3;
+        stacks += `<text x="${ctx.ox - 8}" y="${tagY}" text-anchor="end" font-size="10" fill="#667085">N${nivel + 1}</text>`;
+
         for (let col = 0; col < cols; col++) {
           const x = offsetX + col * rollW;
-          cells += `
-            <rect x="${x}" y="${y}" width="${rollW}" height="${rollH}" fill="#ffffff" stroke="#5a6573" stroke-width="1.2"/>
-            <line x1="${x}" y1="${y + rollH}" x2="${x + rollW}" y2="${y + rollH}" stroke="#c9d1db" stroke-width="0.8"/>
+          const arcH = Math.max(rollH * 0.2, 2.2);
+          stacks += `
+            <rect x="${x}" y="${y + arcH / 2}" width="${rollW}" height="${Math.max(rollH - arcH, 2)}" fill="#ffffff" stroke="#4f5f70" stroke-width="1"/>
+            <ellipse cx="${x + rollW / 2}" cy="${y + arcH / 2}" rx="${rollW / 2}" ry="${arcH / 2}" fill="#f1f5fa" stroke="#4f5f70" stroke-width="1"/>
+            <ellipse cx="${x + rollW / 2}" cy="${y + rollH - arcH / 2}" rx="${rollW / 2}" ry="${arcH / 2}" fill="none" stroke="#c7d0dc" stroke-width="0.8"/>
           `;
         }
       }
 
-      const fondoTxt = piezasAncho > 1
-        ? `${piezasAncho} rollos al fondo por columna`
-        : '1 rollo al fondo por columna';
-
       return `
         <svg viewBox="0 0 ${TECH_VIEW.width} ${TECH_VIEW.height}" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
           <rect x="0" y="0" width="${TECH_VIEW.width}" height="${TECH_VIEW.height}" fill="#ffffff"/>
-          <text x="46" y="44" font-size="20" font-weight="700" fill="#2a2e3a">Vista lateral - ${escapeHtml(m.tipo_caja)}</text>
-          <rect x="${ctx.ox}" y="${ctx.oy}" width="${ctx.boxW}" height="${ctx.boxH}" fill="#f9fbfd" stroke="#2a2e3a" stroke-width="2.5"/>
-          ${cells}
+          <rect x="${ctx.ox}" y="${ctx.oy}" width="${ctx.boxW}" height="${ctx.boxH}" fill="#f8fbff" stroke="#1e2937" stroke-width="2"/>
+          <line x1="${ctx.ox}" y1="${ctx.oy + ctx.boxH}" x2="${ctx.ox + ctx.boxW}" y2="${ctx.oy + ctx.boxH}" stroke="#8ea0b5" stroke-width="1" stroke-dasharray="4 4"/>
+          ${stacks}
           ${generateBoxGuides({
             ox: ctx.ox,
             oy: ctx.oy,
@@ -716,11 +559,11 @@
             hLabel: `${num(m.largo_caja_mm)} mm base`,
             vLabel: `${num(cajaAlto)} mm altura útil`
           })}
-          <text x="46" y="610" font-size="14" fill="#2a2e3a">Ancho efectivo del rollo (alto por nivel): ${num(m.ancho_efectivo_mm)} mm</text>
-          <text x="46" y="634" font-size="14" fill="#2a2e3a">Diámetro efectivo (ancho por columna): ${num(m.diametro_efectivo_mm)} mm</text>
-          <text x="540" y="610" font-size="14" fill="#2a2e3a">Piezas por capa: ${piezasPorCapa}</text>
-          <text x="540" y="634" font-size="14" fill="#2a2e3a">Niveles: ${niveles}</text>
-          <text x="46" y="656" font-size="12" fill="#667085">Lectura de fondo: ${escapeHtml(fondoTxt)}</text>
+          <text x="22" y="26" font-size="13" font-weight="700" fill="#1f2937">${escapeHtml(m.tipo_caja)} · vista lateral</text>
+          <text x="22" y="604" font-size="12" fill="#3b4654">Piezas/capa: ${piezasPorCapa}</text>
+          <text x="172" y="604" font-size="12" fill="#3b4654">Columnas: ${piezasLargo}</text>
+          <text x="302" y="604" font-size="12" fill="#3b4654">Fondo: ${piezasAncho}</text>
+          <text x="402" y="604" font-size="12" fill="#3b4654">Niveles: ${niveles}</text>
         </svg>
       `;
     }
