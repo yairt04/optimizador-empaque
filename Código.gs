@@ -131,11 +131,16 @@ function simularSku(codigo) {
 // Función para la web app
 function simularSkuWeb(codigo) {
   const data = simularSku(codigo);
+  const parametros = getParametros_('Parametros');
+  const cajaIdeal = calcularCajaIdeal_(data.rollo, parametros, data.mejor);
+  const comparacionCajaIdeal = compararCajaIdealVsCatalogo_(data.mejor, cajaIdeal);
   const sugerencia = construirSugerenciaCaja_(data.resultados, data.mejor);
   return {
     rollo: data.rollo,
     mejor: data.mejor,
     resultados: data.resultados,
+    caja_ideal: cajaIdeal,
+    comparacion_caja_ideal: comparacionCajaIdeal,
     sugerencia: sugerencia,
     skus: getSheetObjects_('Rollos').map(r => ({
       codigo: r.codigo,
@@ -377,6 +382,254 @@ function generarVariantesRepetibles_(largoCaja, anchoCaja, diametroEfectivo) {
   });
 
   return variantes;
+}
+
+function calcularCajaIdeal_(rollo, parametros, mejorCatalogo) {
+  const toleranciaPorLado = toNumber_(parametros?.tolerancia_por_lado_mm, 0.5);
+  const usarDiametro = String(parametros?.usar_diametro || 'maximo').toLowerCase();
+  const anchoRollo = toNumber_(rollo?.ancho_mm, 0);
+  const diametroNominal = toNumber_(rollo?.diametro_nominal_mm, 0);
+  const diametroMin = toNumber_(rollo?.diametro_min_mm, 0);
+  const diametroMax = toNumber_(rollo?.diametro_max_mm, 0);
+
+  let diametroCalculo = diametroNominal;
+  if (usarDiametro === 'maximo') diametroCalculo = diametroMax || diametroNominal;
+  if (usarDiametro === 'minimo') diametroCalculo = diametroMin || diametroNominal;
+  if (usarDiametro === 'recomendado') diametroCalculo = Math.max(diametroNominal, diametroMax);
+
+  const anchoEfectivo = anchoRollo + (2 * toleranciaPorLado);
+  const diametroEfectivo = diametroCalculo + (2 * toleranciaPorLado);
+  if (anchoEfectivo <= 0 || diametroEfectivo <= 0) return null;
+
+  const margenLargo = toNumber_(parametros?.margen_seguridad_largo_mm, 6);
+  const margenAncho = toNumber_(parametros?.margen_seguridad_ancho_mm, 6);
+  const margenAlto = toNumber_(parametros?.margen_seguridad_alto_mm, 4);
+  const alturaUtilMax = toNumber_(
+    parametros?.altura_util_max_mm,
+    Math.max(1, toNumber_(mejorCatalogo?.alto_caja_mm, Infinity))
+  );
+
+  const baseCapasCatalogo = Math.max(1, toNumber_(mejorCatalogo?.piezas_por_capa, 1));
+  const baseNivelesCatalogo = Math.max(1, toNumber_(mejorCatalogo?.niveles, 1));
+  const baseTotalCatalogo = Math.max(1, toNumber_(mejorCatalogo?.cantidad_max, 1));
+
+  const maxPiezasPorCapa = Math.min(80, Math.max(baseCapasCatalogo + 16, Math.ceil(baseTotalCatalogo / baseNivelesCatalogo) + 8));
+  const maxNiveles = Math.min(20, Math.max(baseNivelesCatalogo + 4, Math.ceil(baseTotalCatalogo / baseCapasCatalogo) + 2));
+
+  const candidatas = [];
+  for (let columnas = 1; columnas <= maxPiezasPorCapa; columnas++) {
+    for (let filas = 1; filas <= maxPiezasPorCapa; filas++) {
+      const piezasPorCapaEstimadas = columnas * filas;
+      if (piezasPorCapaEstimadas > maxPiezasPorCapa) break;
+
+      for (let niveles = 1; niveles <= maxNiveles; niveles++) {
+        const altoSinMargen = niveles * anchoEfectivo;
+        if (altoSinMargen > alturaUtilMax) break;
+
+        const altoIdealMinimo = altoSinMargen + margenAlto;
+        if (altoIdealMinimo > alturaUtilMax) continue;
+
+        agregarCandidataIdeal_(candidatas, 'grid_recto', {
+          columnas,
+          filas,
+          niveles,
+          diametroEfectivo,
+          anchoEfectivo,
+          margenLargo,
+          margenAncho,
+          margenAlto,
+          alturaUtilMax
+        });
+        agregarCandidataIdeal_(candidatas, 'grid_alternado_tresbolillo', {
+          columnas,
+          filas,
+          niveles,
+          diametroEfectivo,
+          anchoEfectivo,
+          margenLargo,
+          margenAncho,
+          margenAlto,
+          alturaUtilMax
+        });
+        agregarCandidataIdeal_(candidatas, 'arranque_corrido_equivalente', {
+          columnas,
+          filas,
+          niveles,
+          diametroEfectivo,
+          anchoEfectivo,
+          margenLargo,
+          margenAncho,
+          margenAlto,
+          alturaUtilMax
+        });
+      }
+    }
+  }
+
+  const viables = candidatas.filter(c => c.viable_altura && c.repetible && c.cantidad_total > 0);
+  if (!viables.length) return null;
+
+  viables.sort((a, b) => b.score_final - a.score_final);
+  const mejor = viables[0];
+  const volumenRollo = Math.PI * Math.pow(diametroCalculo / 2, 2) * anchoRollo;
+  const volumenCaja = mejor.ancho_caja_mm * mejor.largo_caja_mm * mejor.alto_caja_mm;
+  const aprovechamiento = volumenCaja > 0 ? (mejor.cantidad_total * volumenRollo) / volumenCaja : 0;
+
+  return {
+    tipo_caja: 'CAJA_IDEAL_CALCULADA',
+    orientacion: 'vertical_torre',
+    patron: mejor.nombre_variante,
+    variante_seleccionada: mejor.nombre_variante,
+    ancho_rollo_mm: anchoRollo,
+    diametro_calculo_mm: diametroCalculo,
+    diametro_efectivo_mm: diametroEfectivo,
+    ancho_efectivo_mm: anchoEfectivo,
+    largo_caja_mm: mejor.largo_caja_mm,
+    ancho_caja_mm: mejor.ancho_caja_mm,
+    alto_caja_mm: mejor.alto_caja_mm,
+    piezas_largo: mejor.piezas_largo,
+    piezas_ancho: mejor.piezas_ancho,
+    piezas_por_capa: mejor.piezas_por_capa,
+    niveles: mejor.niveles,
+    cantidad_max: mejor.cantidad_total,
+    aprovechamiento: aprovechamiento,
+    score_final: mejor.score_final,
+    repetible: true,
+    viable_altura: true,
+    layout_rows: JSON.stringify(mejor.layout_rows || []),
+    layout_offsets: JSON.stringify(mejor.layout_offsets || []),
+    estatus: 'IDEAL'
+  };
+}
+
+function agregarCandidataIdeal_(candidatas, nombreVariante, ctx) {
+  const SQRT_3_HALF = 0.8660254038;
+  const columnas = Math.max(1, toNumber_(ctx.columnas, 1));
+  const filas = Math.max(1, toNumber_(ctx.filas, 1));
+  const niveles = Math.max(1, toNumber_(ctx.niveles, 1));
+  const diametroEfectivo = toNumber_(ctx.diametroEfectivo, 0);
+  const anchoEfectivo = toNumber_(ctx.anchoEfectivo, 0);
+  if (diametroEfectivo <= 0 || anchoEfectivo <= 0) return;
+
+  let largoMin = 0;
+  let anchoMin = 0;
+  let layoutRows = [];
+  let layoutOffsets = [];
+
+  if (nombreVariante === 'grid_recto') {
+    largoMin = (columnas * diametroEfectivo) + ctx.margenLargo;
+    anchoMin = (filas * diametroEfectivo) + ctx.margenAncho;
+    layoutRows = Array(filas).fill(columnas);
+    layoutOffsets = Array(filas).fill(0);
+  } else if (nombreVariante === 'grid_alternado_tresbolillo' || nombreVariante === 'arranque_corrido_equivalente') {
+    const offsetInicial = nombreVariante === 'grid_alternado_tresbolillo' ? 0 : 0.5;
+    const layout = construirLayoutTresbolilloConColumnas_(filas, columnas, offsetInicial);
+    const maxAnchoFilas = layout.max_x_ocupada_factores_d * diametroEfectivo;
+    largoMin = maxAnchoFilas + ctx.margenLargo;
+    anchoMin = diametroEfectivo + ((filas - 1) * diametroEfectivo * SQRT_3_HALF) + ctx.margenAncho;
+    layoutRows = layout.layout_rows;
+    layoutOffsets = layout.layout_offsets;
+  } else {
+    return;
+  }
+
+  const altoMin = (niveles * anchoEfectivo) + ctx.margenAlto;
+  const largoRedondeado = redondearDimensionIndustrial_(largoMin);
+  const anchoRedondeado = redondearDimensionIndustrial_(anchoMin);
+  const altoRedondeado = redondearDimensionIndustrial_(altoMin);
+  const viableAltura = altoRedondeado <= ctx.alturaUtilMax;
+  const piezasPorCapa = layoutRows.reduce((acc, v) => acc + v, 0);
+  const cantidadTotal = piezasPorCapa * niveles;
+  const volumenCaja = largoRedondeado * anchoRedondeado * altoRedondeado;
+  const densidad = volumenCaja > 0 ? cantidadTotal / volumenCaja : 0;
+
+  candidatas.push({
+    nombre_variante: nombreVariante,
+    piezas_largo: Math.max(...layoutRows),
+    piezas_ancho: layoutRows.length,
+    piezas_por_capa: piezasPorCapa,
+    niveles: niveles,
+    cantidad_total: cantidadTotal,
+    largo_caja_mm: largoRedondeado,
+    ancho_caja_mm: anchoRedondeado,
+    alto_caja_mm: altoRedondeado,
+    repetible: esPatronRepetible_({ nombre_variante: nombreVariante }),
+    viable_altura: viableAltura,
+    layout_rows: layoutRows,
+    layout_offsets: layoutOffsets,
+    score_final: calcularScoreCajaIdeal_(cantidadTotal, densidad, volumenCaja, nombreVariante)
+  });
+}
+
+function construirLayoutTresbolilloConColumnas_(filas, columnas, offsetInicial) {
+  const rows = [];
+  const offsets = [];
+  let maxXOcupadoFactoresD = 0;
+  for (let i = 0; i < filas; i++) {
+    const offset = (offsetInicial + (i % 2 === 0 ? 0 : 0.5)) % 1;
+    rows.push(columnas);
+    offsets.push(offset);
+    const xOcupado = offset + columnas;
+    if (xOcupado > maxXOcupadoFactoresD) maxXOcupadoFactoresD = xOcupado;
+  }
+  return {
+    layout_rows: rows,
+    layout_offsets: offsets,
+    max_x_ocupada_factores_d: maxXOcupadoFactoresD
+  };
+}
+
+function redondearDimensionIndustrial_(dimensionMm) {
+  const dim = Math.max(0, toNumber_(dimensionMm, 0));
+  if (dim <= 300) return Math.ceil(dim / 5) * 5;
+  if (dim <= 800) return Math.ceil(dim / 10) * 10;
+  return Math.ceil(dim / 20) * 20;
+}
+
+function calcularScoreCajaIdeal_(cantidadTotal, densidad, volumenCaja, nombreVariante) {
+  const bonoSimplicidad = nombreVariante === 'grid_recto' ? 0.003 : 0;
+  return (cantidadTotal * 1000000) + (densidad * 1000000000) - volumenCaja + bonoSimplicidad;
+}
+
+function compararCajaIdealVsCatalogo_(mejorCatalogo, cajaIdeal) {
+  const cantidadCatalogo = toNumber_(mejorCatalogo?.cantidad_max, 0);
+  const cantidadIdeal = toNumber_(cajaIdeal?.cantidad_max, 0);
+  const aprovechamientoCatalogo = toNumber_(mejorCatalogo?.aprovechamiento, 0);
+  const aprovechamientoIdeal = toNumber_(cajaIdeal?.aprovechamiento, 0);
+  const volumenCatalogo = toNumber_(mejorCatalogo?.ancho_caja_mm, 0) *
+    toNumber_(mejorCatalogo?.largo_caja_mm, 0) *
+    toNumber_(mejorCatalogo?.alto_caja_mm, 0);
+  const volumenIdeal = toNumber_(cajaIdeal?.ancho_caja_mm, 0) *
+    toNumber_(cajaIdeal?.largo_caja_mm, 0) *
+    toNumber_(cajaIdeal?.alto_caja_mm, 0);
+
+  const deltaCantidad = cantidadIdeal - cantidadCatalogo;
+  const deltaAprovechamiento = aprovechamientoIdeal - aprovechamientoCatalogo;
+  const deltaVolumen = volumenIdeal - volumenCatalogo;
+  const absDeltaAprovechamiento = Math.abs(deltaAprovechamiento);
+  const cercaniaOptimo = (Math.abs(deltaCantidad) <= 1 && absDeltaAprovechamiento <= 0.01);
+  const idealClaramenteMejor = deltaCantidad >= 2 || deltaAprovechamiento >= 0.03 || deltaVolumen <= (-0.1 * volumenCatalogo);
+
+  return {
+    caja_catalogo: mejorCatalogo?.tipo_caja || '',
+    caja_ideal: cajaIdeal?.tipo_caja || 'CAJA_IDEAL_CALCULADA',
+    cantidad_catalogo: cantidadCatalogo,
+    cantidad_ideal: cantidadIdeal,
+    delta_cantidad: deltaCantidad,
+    aprovechamiento_catalogo: aprovechamientoCatalogo,
+    aprovechamiento_ideal: aprovechamientoIdeal,
+    delta_aprovechamiento: deltaAprovechamiento,
+    volumen_catalogo_mm3: volumenCatalogo,
+    volumen_ideal_mm3: volumenIdeal,
+    delta_volumen_mm3: deltaVolumen,
+    catalogo_cerca_optimo: cercaniaOptimo,
+    ideal_claramente_mejor: idealClaramenteMejor,
+    conclusion: idealClaramenteMejor
+      ? 'La caja ideal calculada supera claramente a la mejor del catálogo.'
+      : (cercaniaOptimo
+        ? 'La mejor caja del catálogo está cerca del óptimo.'
+        : 'La caja del catálogo es funcional, pero hay margen de ajuste hacia el óptimo.')
+  };
 }
 
 function evaluarVarianteVertical_(variante, ctx) {
