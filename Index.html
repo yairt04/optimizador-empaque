@@ -246,6 +246,18 @@
       color:#1f2937;
       line-height:1.4;
     }
+    .ideal-card{
+      margin-top:10px;
+      background:#eef6ff;
+      border:1px solid #bfdbfe;
+      border-left:4px solid #1d4ed8;
+      border-radius:10px;
+      padding:10px 12px;
+      font-size:13px;
+      color:#1f2937;
+      line-height:1.45;
+    }
+    .ideal-title{font-weight:700;margin-bottom:4px}
     .suggestion-card.warn{border-left-color:#f59e0b;background:#fffbeb}
     .suggestion-card.ok{border-left-color:#16a34a;background:#f0fdf4}
     .suggestion-title{font-weight:700;margin-bottom:4px}
@@ -332,6 +344,7 @@
 
     <div class="panel table-card">
       <div id="sugerenciaCard" class="suggestion-card">Selecciona un SKU para evaluar sugerencia de caja.</div>
+      <div id="cajaIdealCard" class="ideal-card">Selecciona un SKU para calcular caja ideal sugerida.</div>
       <h3>Comparativo por caja</h3>
       <div id="tabla"></div>
     </div>
@@ -460,6 +473,7 @@
       document.getElementById('layoutTop').innerHTML = generarSVGTop(mejor);
       renderSideView(mejor);
       renderSugerencia(data.sugerencia, mejor);
+      renderCajaIdeal(data.caja_ideal, data.comparacion_caja_ideal);
       document.getElementById('tabla').innerHTML = generarTabla(data.resultados);
     }
 
@@ -496,6 +510,39 @@
       node.innerHTML = `
         <div class="suggestion-title">Sugerencia de cambio de caja</div>
         <div>La caja seleccionada ya está en rango saludable de aprovechamiento.</div>
+      `;
+    }
+
+    function renderCajaIdeal(cajaIdeal, comparacion) {
+      const node = document.getElementById('cajaIdealCard');
+      if (!node) return;
+      if (!cajaIdeal) {
+        node.innerHTML = `
+          <div class="ideal-title">Caja ideal sugerida</div>
+          <div>No fue posible calcular una caja ideal con las reglas actuales.</div>
+        `;
+        return;
+      }
+
+      const piezasPorCapa = Number(cajaIdeal.piezas_por_capa || 0);
+      const niveles = Number(cajaIdeal.niveles || 0);
+      const total = Number(cajaIdeal.cantidad_max || 0);
+      const cmp = comparacion || {};
+      const deltaCantidad = Number(cmp.delta_cantidad || 0);
+      const deltaPct = (Number(cmp.delta_aprovechamiento || 0) * 100).toFixed(2);
+      const estado = cmp.ideal_claramente_mejor
+        ? 'Existe una caja ideal claramente mejor que catálogo.'
+        : (cmp.catalogo_cerca_optimo
+          ? 'La caja del catálogo está cerca del óptimo.'
+          : 'La caja del catálogo es funcional, pero no óptima.');
+
+      node.innerHTML = `
+        <div class="ideal-title">Caja ideal sugerida</div>
+        <div><b>Dimensiones ideales:</b> ${num(cajaIdeal.largo_caja_mm)} × ${num(cajaIdeal.ancho_caja_mm)} × ${num(cajaIdeal.alto_caja_mm)} mm</div>
+        <div><b>Patrón:</b> ${escapeHtml(cajaIdeal.patron || cajaIdeal.variante_seleccionada || 'grid_recto')}</div>
+        <div><b>Piezas por capa:</b> ${num(piezasPorCapa)} · <b>Niveles:</b> ${num(niveles)} · <b>Total:</b> ${num(total)}</div>
+        <div><b>Comparación vs catálogo:</b> Δ cantidad ${deltaCantidad >= 0 ? '+' : ''}${num(deltaCantidad)} · Δ aprovechamiento ${deltaPct}%</div>
+        <div>${escapeHtml(cmp.conclusion || estado)}</div>
       `;
     }
 
