@@ -530,6 +530,33 @@
       `;
     }
 
+    function buildFreeAreaOverlayTop({ ctx, layoutStartX, layoutStartY, layoutWidthPx, layoutHeightPx }) {
+      const freeLeft = layoutStartX - ctx.ox;
+      const freeTop = layoutStartY - ctx.oy;
+      const freeRight = (ctx.ox + ctx.boxW) - (layoutStartX + layoutWidthPx);
+      const freeBottom = (ctx.oy + ctx.boxH) - (layoutStartY + layoutHeightPx);
+      const minAreaSizePx = 1;
+      const overlayFill = '#f59e0b';
+      const overlayOpacity = '0.10';
+      const overlayStroke = '#d97706';
+      const overlayStrokeOpacity = '0.22';
+
+      let overlay = '';
+      if (freeLeft > minAreaSizePx) {
+        overlay += `<rect x="${ctx.ox}" y="${ctx.oy}" width="${freeLeft}" height="${ctx.boxH}" fill="${overlayFill}" fill-opacity="${overlayOpacity}" stroke="${overlayStroke}" stroke-opacity="${overlayStrokeOpacity}" stroke-width="0.5"/>`;
+      }
+      if (freeRight > minAreaSizePx) {
+        overlay += `<rect x="${layoutStartX + layoutWidthPx}" y="${ctx.oy}" width="${freeRight}" height="${ctx.boxH}" fill="${overlayFill}" fill-opacity="${overlayOpacity}" stroke="${overlayStroke}" stroke-opacity="${overlayStrokeOpacity}" stroke-width="0.5"/>`;
+      }
+      if (freeTop > minAreaSizePx) {
+        overlay += `<rect x="${layoutStartX}" y="${ctx.oy}" width="${layoutWidthPx}" height="${freeTop}" fill="${overlayFill}" fill-opacity="${overlayOpacity}" stroke="${overlayStroke}" stroke-opacity="${overlayStrokeOpacity}" stroke-width="0.5"/>`;
+      }
+      if (freeBottom > minAreaSizePx) {
+        overlay += `<rect x="${layoutStartX}" y="${layoutStartY + layoutHeightPx}" width="${layoutWidthPx}" height="${freeBottom}" fill="${overlayFill}" fill-opacity="${overlayOpacity}" stroke="${overlayStroke}" stroke-opacity="${overlayStrokeOpacity}" stroke-width="0.5"/>`;
+      }
+      return overlay;
+    }
+
     function generarSVGTop(m) {
       const cajaW = Number(m.largo_caja_mm) || 1;
       const cajaH = Number(m.ancho_caja_mm) || 1;
@@ -563,6 +590,7 @@
       const layoutHeightPx = layoutHeightMm * ctx.scale;
       const layoutStartX = ctx.ox + ((ctx.boxW - layoutWidthPx) / 2);
       const layoutStartY = ctx.oy + ((ctx.boxH - layoutHeightPx) / 2);
+      const freeAreaOverlay = buildFreeAreaOverlayTop({ ctx, layoutStartX, layoutStartY, layoutWidthPx, layoutHeightPx });
 
       for (let row = 0; row < rowsToDraw.length; row++) {
         const cols = Number(rowsToDraw[row]) || 0;
@@ -581,6 +609,7 @@
         <svg width="${TECH_VIEW.width}" height="${TECH_VIEW.height}" viewBox="0 0 ${TECH_VIEW.width} ${TECH_VIEW.height}" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
           <rect x="0" y="0" width="${TECH_VIEW.width}" height="${TECH_VIEW.height}" fill="#ffffff"/>
           <rect x="${ctx.ox}" y="${ctx.oy}" width="${ctx.boxW}" height="${ctx.boxH}" fill="#f8fbff" stroke="#1e2937" stroke-width="2"/>
+          ${freeAreaOverlay}
           ${circles}
           ${generateBoxGuides({
             ox: ctx.ox,
