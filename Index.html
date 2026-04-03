@@ -536,6 +536,7 @@
       const diam = Number(m.diametro_efectivo_mm) || 1;
       const piezasLargo = Math.max(0, Number(m.piezas_largo) || 0);
       const piezasAncho = Math.max(0, Number(m.piezas_ancho) || 0);
+      const varianteSeleccionada = m.variante_seleccionada || 'grid_recto';
       const layoutRows = parseJsonArray(m.layout_rows);
       const layoutOffsets = parseJsonArray(m.layout_offsets);
       const total = Number(m.cantidad_max) || 0;
@@ -548,13 +549,27 @@
 
       const rowsToDraw = layoutRows.length ? layoutRows : Array(piezasAncho).fill(piezasLargo);
       const offsetsToDraw = layoutRows.length ? layoutOffsets : Array(rowsToDraw.length).fill(0);
-      const yStep = layoutRows.length ? (diam * 0.8660254038 * ctx.scale) : diamPx;
+      const hasAlternatingLayout = varianteSeleccionada === 'grid_alternado_tresbolillo' || varianteSeleccionada === 'arranque_corrido_equivalente';
+      const yStepMm = hasAlternatingLayout ? (diam * 0.8660254038) : diam;
+      const yStepPx = yStepMm * ctx.scale;
+      const numRows = rowsToDraw.length;
+      const layoutWidthMm = rowsToDraw.reduce((maxWidth, colsRaw, rowIndex) => {
+        const cols = Math.max(0, Number(colsRaw) || 0);
+        const offsetFactor = Number(offsetsToDraw[rowIndex]) || 0;
+        return Math.max(maxWidth, (offsetFactor + cols) * diam);
+      }, 0);
+      const layoutHeightMm = numRows ? diam + ((numRows - 1) * yStepMm) : 0;
+      const layoutWidthPx = layoutWidthMm * ctx.scale;
+      const layoutHeightPx = layoutHeightMm * ctx.scale;
+      const layoutStartX = ctx.ox + ((ctx.boxW - layoutWidthPx) / 2);
+      const layoutStartY = ctx.oy + ((ctx.boxH - layoutHeightPx) / 2);
+
       for (let row = 0; row < rowsToDraw.length; row++) {
         const cols = Number(rowsToDraw[row]) || 0;
-        const offset = (Number(offsetsToDraw[row]) || 0) * diamPx;
+        const offsetMm = (Number(offsetsToDraw[row]) || 0) * diam;
         for (let col = 0; col < cols; col++) {
-          const cx = ctx.ox + r + offset + col * diamPx;
-          const cy = ctx.oy + r + row * yStep;
+          const cx = layoutStartX + (offsetMm * ctx.scale) + r + col * diamPx;
+          const cy = layoutStartY + r + row * yStepPx;
           circles += `
             <circle cx="${cx}" cy="${cy}" r="${r}" fill="#ffffff" stroke="#4f5f70" stroke-width="1.2"/>
             <circle cx="${cx}" cy="${cy}" r="${Math.max(r * 0.22, 2.6)}" fill="#edf2f7" stroke="#4f5f70" stroke-width="0.8"/>
@@ -576,7 +591,7 @@
             vLabel: `${num(m.ancho_caja_mm)} mm ancho`
           })}
           <text x="22" y="26" font-size="13" font-weight="700" fill="#1f2937">${escapeHtml(m.tipo_caja)} · vista superior</text>
-          <text x="22" y="604" font-size="12" fill="#3b4654">Capa: ${num(m.piezas_por_capa || (piezasLargo * piezasAncho))} · ${escapeHtml(m.variante_seleccionada || 'grid_recto')}</text>
+          <text x="22" y="604" font-size="12" fill="#3b4654">Capa: ${num(m.piezas_por_capa || (piezasLargo * piezasAncho))} · ${escapeHtml(varianteSeleccionada)}</text>
           <text x="330" y="604" font-size="12" fill="#3b4654">Niveles: ${niveles}</text>
           <text x="452" y="604" font-size="12" fill="#ff8500" font-weight="700">Total: ${total} rollos</text>
         </svg>
