@@ -954,10 +954,16 @@
 
     function descargarSVGComoImagen(svgElementId, nombreArchivo, formato = 'jpeg') {
       const container = document.getElementById(svgElementId);
-      if (!container) return;
+      if (!container) {
+        console.warn(`No se encontró el contenedor para exportar: ${svgElementId}`);
+        return;
+      }
 
       const svgNode = container.querySelector('svg');
-      if (!svgNode) return;
+      if (!svgNode) {
+        console.warn('No hay SVG para exportar');
+        return;
+      }
 
       const serializer = new XMLSerializer();
       const svgString = serializer.serializeToString(svgNode);
@@ -983,6 +989,7 @@
           return;
         }
 
+        ctx.globalCompositeOperation = 'source-over';
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
@@ -1015,7 +1022,8 @@
       const topContainer = document.getElementById('layoutTop');
       const sideContainer = document.getElementById('layoutSide');
 
-      if (topContainer) {
+      if (topContainer && !topContainer.dataset.exportBound) {
+        topContainer.dataset.exportBound = '1';
         topContainer.addEventListener('contextmenu', (event) => {
           event.preventDefault();
           const nombre = construirNombreImagen('superior', 'jpeg');
@@ -1023,7 +1031,8 @@
         });
       }
 
-      if (sideContainer) {
+      if (sideContainer && !sideContainer.dataset.exportBound) {
+        sideContainer.dataset.exportBound = '1';
         sideContainer.addEventListener('contextmenu', (event) => {
           event.preventDefault();
           const nombre = construirNombreImagen('lateral', 'jpeg');
