@@ -28,6 +28,15 @@ const UMBRALES_SUGERENCIA_CAJA_ = {
   mejora_min_sobrante_abs_mm: 10
 };
 
+const CACHE_TTL_SEGUNDOS_ = 300;
+const PERF_LOGS_ACTIVOS_ = true;
+const CACHE_KEYS_ = {
+  rollos: 'opt:rollos:v1',
+  cajas: 'opt:cajas:v1',
+  parametros: 'opt:parametros:v1',
+  skus_web: 'opt:skus_web:v1'
+};
+
 function onEdit(e) {
   try {
     if (!e || !e.range) return;
@@ -36,6 +45,7 @@ function onEdit(e) {
     const hojasQueRecalculan = ['Parametros', 'Rollos', 'Cajas'];
 
     if (!hojasQueRecalculan.includes(hoja)) return;
+    clearDataCaches_();
 
     optimizarTodosSilencioso_();
   } catch (error) {
@@ -59,8 +69,8 @@ function probarSkuDePrueba() {
 }
 
 function optimizarTodos() {
-  const rollos = getSheetObjects_('Rollos');
-  const cajas = getSheetObjects_('Cajas');
+  const dataCtx = getDataCtxCached_();
+  const rollos = dataCtx.rollos;
 
   const resultadosFinales = [];
   const resultadosDetalle = [];
@@ -68,7 +78,7 @@ function optimizarTodos() {
   for (const rollo of rollos) {
     if (!rollo.codigo) continue;
 
-    const matches = evaluarTodasLasCajas_(rollo);
+    const matches = evaluarTodasLasCajas_(rollo, dataCtx);
 
     matches.forEach(m => resultadosDetalle.push(m));
 
@@ -89,7 +99,8 @@ function optimizarTodos() {
 }
 
 function optimizarTodosSilencioso_() {
-  const rollos = getSheetObjects_('Rollos');
+  const dataCtx = getDataCtxCached_();
+  const rollos = dataCtx.rollos;
 
   const resultadosFinales = [];
   const resultadosDetalle = [];
@@ -97,7 +108,7 @@ function optimizarTodosSilencioso_() {
   for (const rollo of rollos) {
     if (!rollo.codigo) continue;
 
-    const matches = evaluarTodasLasCajas_(rollo);
+    const matches = evaluarTodasLasCajas_(rollo, dataCtx);
 
     matches.forEach(m => resultadosDetalle.push(m));
 
@@ -111,15 +122,16 @@ function optimizarTodosSilencioso_() {
   actualizarMarcaDeTiempo_();
 }
 
-function simularSku(codigo) {
-  const rollos = getSheetObjects_('Rollos');
+function simularSku(codigo, dataCtx) {
+  const ctx = dataCtx || getDataCtxCached_();
+  const rollos = ctx.rollos;
 
   const rollo = rollos.find(r => String(r.codigo) === String(codigo));
   if (!rollo) {
     throw new Error('No se encontró el SKU: ' + codigo);
   }
 
-  const resultados = evaluarTodasLasCajas_(rollo);
+  const resultados = evaluarTodasLasCajas_(rollo, ctx);
 
   return {
     rollo,
@@ -130,11 +142,26 @@ function simularSku(codigo) {
 
 // Función para la web app
 function simularSkuWeb(codigo) {
-  const data = simularSku(codigo);
-  const parametros = getParametros_('Parametros');
+  timeStart_('simularSkuWeb.total');
+  timeStart_('simularSkuWeb.carga_datos');
+  const dataCtx = getDataCtxCached_();
+  timeEnd_('simularSkuWeb.carga_datos');
+
+  const data = simularSku(codigo, dataCtx);
+  const parametros = dataCtx.parametros;
+
+  timeStart_('simularSkuWeb.caja_ideal');
   const cajaIdeal = calcularCajaIdeal_(data.rollo, parametros, data.mejor);
+  timeEnd_('simularSkuWeb.caja_ideal');
+
   const comparacionCajaIdeal = compararCajaIdealVsCatalogo_(data.mejor, cajaIdeal);
   const sugerencia = construirSugerenciaCaja_(data.resultados, data.mejor);
+
+  timeStart_('simularSkuWeb.skus_web');
+  const skus = getSkusWebCached_();
+  timeEnd_('simularSkuWeb.skus_web');
+  timeEnd_('simularSkuWeb.total');
+
   return {
     rollo: data.rollo,
     mejor: data.mejor,
@@ -142,23 +169,19 @@ function simularSkuWeb(codigo) {
     caja_ideal: cajaIdeal,
     comparacion_caja_ideal: comparacionCajaIdeal,
     sugerencia: sugerencia,
-    skus: getSheetObjects_('Rollos').map(r => ({
-      codigo: r.codigo,
-      descripcion: r.descripcion || ''
-    }))
+    skus
   };
 }
 
 function getSkusWeb() {
-  return getSheetObjects_('Rollos').map(r => ({
-    codigo: r.codigo,
-    descripcion: r.descripcion || ''
-  }));
+  return getSkusWebCached_();
 }
 
-function evaluarTodasLasCajas_(rollo) {
-  const cajas = getSheetObjects_('Cajas');
-  const parametros = getParametros_('Parametros');
+function evaluarTodasLasCajas_(rollo, dataCtx) {
+  timeStart_('evaluarTodasLasCajas_');
+  const ctx = dataCtx || getDataCtxCached_();
+  const cajas = ctx.cajas;
+  const parametros = ctx.parametros;
 
   const matches = cajas.map(caja => calcularMatch_(rollo, caja, parametros));
 
@@ -180,6 +203,7 @@ function evaluarTodasLasCajas_(rollo) {
     return b.aprovechamiento - a.aprovechamiento;
   });
 
+  timeEnd_('evaluarTodasLasCajas_');
   return matches;
 }
 
@@ -385,6 +409,7 @@ function generarVariantesRepetibles_(largoCaja, anchoCaja, diametroEfectivo) {
 }
 
 function calcularCajaIdeal_(rollo, parametros, mejorCatalogo) {
+  timeStart_('calcularCajaIdeal_');
   const toleranciaPorLado = toNumber_(parametros?.tolerancia_por_lado_mm, 0.5);
   const usarDiametro = String(parametros?.usar_diametro || 'maximo').toLowerCase();
   const anchoRollo = toNumber_(rollo?.ancho_mm, 0);
@@ -412,62 +437,85 @@ function calcularCajaIdeal_(rollo, parametros, mejorCatalogo) {
   const baseCapasCatalogo = Math.max(1, toNumber_(mejorCatalogo?.piezas_por_capa, 1));
   const baseNivelesCatalogo = Math.max(1, toNumber_(mejorCatalogo?.niveles, 1));
   const baseTotalCatalogo = Math.max(1, toNumber_(mejorCatalogo?.cantidad_max, 1));
+  const baseColumnasCatalogo = Math.max(1, toNumber_(mejorCatalogo?.piezas_largo, Math.ceil(Math.sqrt(baseCapasCatalogo))));
+  const baseFilasCatalogo = Math.max(1, toNumber_(mejorCatalogo?.piezas_ancho, Math.ceil(baseCapasCatalogo / baseColumnasCatalogo)));
 
-  const maxPiezasPorCapa = Math.min(80, Math.max(baseCapasCatalogo + 16, Math.ceil(baseTotalCatalogo / baseNivelesCatalogo) + 8));
-  const maxNiveles = Math.min(20, Math.max(baseNivelesCatalogo + 4, Math.ceil(baseTotalCatalogo / baseCapasCatalogo) + 2));
+  const maxPiezasPorCapa = Math.min(80, Math.max(baseCapasCatalogo + 10, Math.ceil(baseTotalCatalogo / baseNivelesCatalogo) + 4));
+  const maxNiveles = Math.min(20, Math.max(baseNivelesCatalogo + 3, Math.ceil(baseTotalCatalogo / baseCapasCatalogo) + 2));
+  const maxColumnas = Math.max(1, Math.ceil(maxPiezasPorCapa / Math.max(1, baseFilasCatalogo)) + 2);
+  const maxFilas = Math.max(1, Math.ceil(maxPiezasPorCapa / Math.max(1, baseColumnasCatalogo)) + 2);
 
   const candidatas = [];
-  for (let columnas = 1; columnas <= maxPiezasPorCapa; columnas++) {
-    for (let filas = 1; filas <= maxPiezasPorCapa; filas++) {
+  const candidatasKeySet = {};
+  const columnasRango = construirRangoCercano_(baseColumnasCatalogo, 3, 1, maxColumnas);
+  const filasRango = construirRangoCercano_(baseFilasCatalogo, 3, 1, maxFilas);
+  const nivelesRango = construirRangoCercano_(baseNivelesCatalogo, 2, 1, maxNiveles);
+
+  const combinaciones = [];
+  for (const columnas of columnasRango) {
+    for (const filas of filasRango) {
       const piezasPorCapaEstimadas = columnas * filas;
-      if (piezasPorCapaEstimadas > maxPiezasPorCapa) break;
+      if (piezasPorCapaEstimadas > maxPiezasPorCapa) continue;
 
-      for (let niveles = 1; niveles <= maxNiveles; niveles++) {
+      for (const niveles of nivelesRango) {
         const altoSinMargen = niveles * anchoEfectivo;
-        if (altoSinMargen > alturaUtilMax) break;
-
+        if (altoSinMargen > alturaUtilMax) continue;
         const altoIdealMinimo = altoSinMargen + margenAlto;
         if (altoIdealMinimo > alturaUtilMax) continue;
 
-        agregarCandidataIdeal_(candidatas, 'grid_recto', {
+        combinaciones.push({
           columnas,
           filas,
           niveles,
-          diametroEfectivo,
-          anchoEfectivo,
-          margenLargo,
-          margenAncho,
-          margenAlto,
-          alturaUtilMax
-        });
-        agregarCandidataIdeal_(candidatas, 'grid_alternado_tresbolillo', {
-          columnas,
-          filas,
-          niveles,
-          diametroEfectivo,
-          anchoEfectivo,
-          margenLargo,
-          margenAncho,
-          margenAlto,
-          alturaUtilMax
-        });
-        agregarCandidataIdeal_(candidatas, 'arranque_corrido_equivalente', {
-          columnas,
-          filas,
-          niveles,
-          diametroEfectivo,
-          anchoEfectivo,
-          margenLargo,
-          margenAncho,
-          margenAlto,
-          alturaUtilMax
+          distancia: Math.abs(columnas - baseColumnasCatalogo) +
+            Math.abs(filas - baseFilasCatalogo) +
+            Math.abs(niveles - baseNivelesCatalogo)
         });
       }
     }
   }
+  combinaciones.sort((a, b) => a.distancia - b.distancia);
+
+  let mejorScore = -Infinity;
+  let iteracionesSinMejora = 0;
+  const limiteCombinaciones = 260;
+
+  for (let i = 0; i < combinaciones.length && i < limiteCombinaciones; i++) {
+    const item = combinaciones[i];
+    const variantes = ['grid_recto', 'grid_alternado_tresbolillo', 'arranque_corrido_equivalente'];
+
+    for (const nombreVariante of variantes) {
+      const candidata = buildCandidataIdeal_(nombreVariante, {
+        columnas: item.columnas,
+        filas: item.filas,
+        niveles: item.niveles,
+        diametroEfectivo,
+        anchoEfectivo,
+        margenLargo,
+        margenAncho,
+        margenAlto,
+        alturaUtilMax
+      });
+      if (!candidata) continue;
+      pushCandidataIdealUnica_(candidatas, candidatasKeySet, candidata);
+
+      if (candidata.viable_altura && candidata.repetible && candidata.cantidad_total > 0 && candidata.score_final > mejorScore) {
+        mejorScore = candidata.score_final;
+        iteracionesSinMejora = 0;
+      }
+    }
+
+    iteracionesSinMejora++;
+    if (mejorScore > -Infinity && iteracionesSinMejora >= 90 && item.distancia > 4) {
+      break;
+    }
+  }
 
   const viables = candidatas.filter(c => c.viable_altura && c.repetible && c.cantidad_total > 0);
-  if (!viables.length) return null;
+  if (!viables.length) {
+    timeEnd_('calcularCajaIdeal_');
+    return null;
+  }
 
   viables.sort((a, b) => b.score_final - a.score_final);
   const mejor = viables[0];
@@ -475,7 +523,7 @@ function calcularCajaIdeal_(rollo, parametros, mejorCatalogo) {
   const volumenCaja = mejor.ancho_caja_mm * mejor.largo_caja_mm * mejor.alto_caja_mm;
   const aprovechamiento = volumenCaja > 0 ? (mejor.cantidad_total * volumenRollo) / volumenCaja : 0;
 
-  return {
+  const salida = {
     tipo_caja: 'CAJA_IDEAL_CALCULADA',
     orientacion: 'vertical_torre',
     patron: mejor.nombre_variante,
@@ -500,16 +548,18 @@ function calcularCajaIdeal_(rollo, parametros, mejorCatalogo) {
     layout_offsets: JSON.stringify(mejor.layout_offsets || []),
     estatus: 'IDEAL'
   };
+  timeEnd_('calcularCajaIdeal_');
+  return salida;
 }
 
-function agregarCandidataIdeal_(candidatas, nombreVariante, ctx) {
+function buildCandidataIdeal_(nombreVariante, ctx) {
   const SQRT_3_HALF = 0.8660254038;
   const columnas = Math.max(1, toNumber_(ctx.columnas, 1));
   const filas = Math.max(1, toNumber_(ctx.filas, 1));
   const niveles = Math.max(1, toNumber_(ctx.niveles, 1));
   const diametroEfectivo = toNumber_(ctx.diametroEfectivo, 0);
   const anchoEfectivo = toNumber_(ctx.anchoEfectivo, 0);
-  if (diametroEfectivo <= 0 || anchoEfectivo <= 0) return;
+  if (diametroEfectivo <= 0 || anchoEfectivo <= 0) return null;
 
   let largoMin = 0;
   let anchoMin = 0;
@@ -530,7 +580,7 @@ function agregarCandidataIdeal_(candidatas, nombreVariante, ctx) {
     layoutRows = layout.layout_rows;
     layoutOffsets = layout.layout_offsets;
   } else {
-    return;
+    return null;
   }
 
   const altoMin = (niveles * anchoEfectivo) + ctx.margenAlto;
@@ -543,7 +593,7 @@ function agregarCandidataIdeal_(candidatas, nombreVariante, ctx) {
   const volumenCaja = largoRedondeado * anchoRedondeado * altoRedondeado;
   const densidad = volumenCaja > 0 ? cantidadTotal / volumenCaja : 0;
 
-  candidatas.push({
+  return {
     nombre_variante: nombreVariante,
     piezas_largo: Math.max(...layoutRows),
     piezas_ancho: layoutRows.length,
@@ -558,7 +608,35 @@ function agregarCandidataIdeal_(candidatas, nombreVariante, ctx) {
     layout_rows: layoutRows,
     layout_offsets: layoutOffsets,
     score_final: calcularScoreCajaIdeal_(cantidadTotal, densidad, volumenCaja, nombreVariante)
-  });
+  };
+}
+
+function pushCandidataIdealUnica_(candidatas, keySet, candidata) {
+  if (!candidata) return;
+  const key = [
+    toNumber_(candidata.largo_caja_mm, 0),
+    toNumber_(candidata.ancho_caja_mm, 0),
+    toNumber_(candidata.alto_caja_mm, 0),
+    candidata.nombre_variante || '',
+    toNumber_(candidata.piezas_por_capa, 0),
+    toNumber_(candidata.niveles, 0)
+  ].join('|');
+
+  if (keySet[key]) return;
+  keySet[key] = true;
+  candidatas.push(candidata);
+}
+
+function construirRangoCercano_(base, radio, min, max) {
+  const centro = Math.max(min, Math.min(max, Math.round(base)));
+  const out = [];
+  for (let d = 0; d <= radio; d++) {
+    const menos = centro - d;
+    const mas = centro + d;
+    if (menos >= min) out.push(menos);
+    if (mas <= max && mas !== menos) out.push(mas);
+  }
+  return Array.from(new Set(out));
 }
 
 function construirLayoutTresbolilloConColumnas_(filas, columnas, offsetInicial) {
@@ -864,6 +942,61 @@ function writeRowsToSheet_(sheetName, rows, limpiarPrimero) {
   sheet.setFrozenRows(1);
 }
 
+function getDataCtxCached_() {
+  return {
+    rollos: getRollosCached_(),
+    cajas: getCajasCached_(),
+    parametros: getParametrosCached_()
+  };
+}
+
+function getRollosCached_() {
+  return getCachedJson_(CACHE_KEYS_.rollos, () => getSheetObjects_('Rollos'));
+}
+
+function getCajasCached_() {
+  return getCachedJson_(CACHE_KEYS_.cajas, () => getSheetObjects_('Cajas'));
+}
+
+function getParametrosCached_() {
+  return getCachedJson_(CACHE_KEYS_.parametros, () => getParametros_('Parametros'));
+}
+
+function getSkusWebCached_() {
+  return getCachedJson_(CACHE_KEYS_.skus_web, () => {
+    const rollos = getRollosCached_();
+    return rollos.map(r => ({
+      codigo: r.codigo,
+      descripcion: r.descripcion || ''
+    }));
+  });
+}
+
+function getCachedJson_(cacheKey, fallbackFn) {
+  const cache = CacheService.getScriptCache();
+  const cachedRaw = cache.get(cacheKey);
+  if (cachedRaw) {
+    try {
+      return JSON.parse(cachedRaw);
+    } catch (error) {
+      Logger.log('Cache JSON inválido para key=' + cacheKey + '. Se recarga desde hoja.');
+    }
+  }
+
+  const freshData = fallbackFn();
+  cache.put(cacheKey, JSON.stringify(freshData), CACHE_TTL_SEGUNDOS_);
+  return freshData;
+}
+
+function clearDataCaches_() {
+  CacheService.getScriptCache().removeAll([
+    CACHE_KEYS_.rollos,
+    CACHE_KEYS_.cajas,
+    CACHE_KEYS_.parametros,
+    CACHE_KEYS_.skus_web
+  ]);
+}
+
 function getSheetObjects_(sheetName) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(sheetName);
@@ -944,6 +1077,24 @@ function normalizeKey_(value) {
 function toNumber_(value, fallback) {
   const num = Number(value);
   return isNaN(num) ? fallback : num;
+}
+
+function timeStart_(label) {
+  if (!PERF_LOGS_ACTIVOS_) return;
+  try {
+    console.time(label);
+  } catch (error) {
+    Logger.log('START ' + label + ' @ ' + new Date().toISOString());
+  }
+}
+
+function timeEnd_(label) {
+  if (!PERF_LOGS_ACTIVOS_) return;
+  try {
+    console.timeEnd(label);
+  } catch (error) {
+    Logger.log('END ' + label + ' @ ' + new Date().toISOString());
+  }
 }
 
 function calcularSobranteTotal_(resultado) {
