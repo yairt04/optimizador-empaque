@@ -352,12 +352,21 @@
 
   <script>
     let skuCatalogo = [];
+    let skuCatalogoIndex = [];
     let skuSeleccionado = null;
+    let ultimoQueryRender = null;
+    let ultimoDropdownHtml = '';
 
     function cargarSkus() {
       google.script.run
         .withSuccessHandler(data => {
           skuCatalogo = data || [];
+          skuCatalogoIndex = skuCatalogo.map(item => ({
+            item,
+            search: `${String(item.codigo || '').toLowerCase()} ${String(item.descripcion || '').toLowerCase()}`
+          }));
+          ultimoQueryRender = null;
+          ultimoDropdownHtml = '';
           document.getElementById('estado').textContent = 'Listo para buscar.';
         })
         .withFailureHandler(err => {
@@ -370,29 +379,34 @@
       const input = document.getElementById('skuSearch');
       const dropdown = document.getElementById('dropdown');
       const q = (input.value || '').trim().toLowerCase();
+      if (q === ultimoQueryRender && dropdown.style.display !== 'none') return;
 
-      const filtrados = skuCatalogo
-        .filter(item => {
-          const codigo = String(item.codigo || '').toLowerCase();
-          const descripcion = String(item.descripcion || '').toLowerCase();
-          return codigo.includes(q) || descripcion.includes(q);
-        })
+      const filtrados = skuCatalogoIndex
+        .filter(entry => entry.search.includes(q))
+        .map(entry => entry.item)
         .slice(0, 20);
 
       if (!q && !filtrados.length) {
         dropdown.style.display = 'none';
-        dropdown.innerHTML = '';
+        if (dropdown.innerHTML) dropdown.innerHTML = '';
+        ultimoQueryRender = q;
+        ultimoDropdownHtml = '';
         return;
       }
 
-      dropdown.innerHTML = filtrados.map(item => `
+      const nextHtml = filtrados.map(item => `
         <div class="result-item" onclick="seleccionarSku('${escapeJs(item.codigo)}')">
           <strong>${escapeHtml(item.codigo)}</strong><br>
           <span>${escapeHtml(item.descripcion || '')}</span>
         </div>
       `).join('');
+      if (nextHtml !== ultimoDropdownHtml) {
+        dropdown.innerHTML = nextHtml;
+        ultimoDropdownHtml = nextHtml;
+      }
 
       dropdown.style.display = filtrados.length ? 'block' : 'none';
+      ultimoQueryRender = q;
     }
 
     function seleccionarSku(codigo) {
