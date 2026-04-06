@@ -945,6 +945,93 @@
         .replaceAll("'", "\\'");
     }
 
+    function construirNombreImagen(tipoVista, formato = 'jpeg') {
+      const skuBase = String(skuSeleccionado || 'sin_sku').trim() || 'sin_sku';
+      const skuSeguro = skuBase.replace(/[\\/:*?"<>|]/g, '_');
+      const extension = String(formato || 'jpeg').toLowerCase();
+      return `${skuSeguro} (${tipoVista}).${extension}`;
+    }
+
+    function descargarSVGComoImagen(svgElementId, nombreArchivo, formato = 'jpeg') {
+      const container = document.getElementById(svgElementId);
+      if (!container) return;
+
+      const svgNode = container.querySelector('svg');
+      if (!svgNode) return;
+
+      const serializer = new XMLSerializer();
+      const svgString = serializer.serializeToString(svgNode);
+      if (!svgString) return;
+
+      const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+      const svgUrl = URL.createObjectURL(svgBlob);
+      const image = new Image();
+
+      image.onload = () => {
+        const viewBox = svgNode.viewBox?.baseVal;
+        const sourceWidth = (viewBox && viewBox.width) ? viewBox.width : (svgNode.clientWidth || 1);
+        const sourceHeight = (viewBox && viewBox.height) ? viewBox.height : (svgNode.clientHeight || 1);
+        const scaleFactor = 2;
+
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(sourceWidth * scaleFactor));
+        canvas.height = Math.max(1, Math.round(sourceHeight * scaleFactor));
+
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          URL.revokeObjectURL(svgUrl);
+          return;
+        }
+
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+        canvas.toBlob((blob) => {
+          if (!blob) {
+            URL.revokeObjectURL(svgUrl);
+            return;
+          }
+          const downloadUrl = URL.createObjectURL(blob);
+          const anchor = document.createElement('a');
+          anchor.href = downloadUrl;
+          anchor.download = nombreArchivo;
+          document.body.appendChild(anchor);
+          anchor.click();
+          anchor.remove();
+          URL.revokeObjectURL(downloadUrl);
+          URL.revokeObjectURL(svgUrl);
+        }, `image/${String(formato || 'jpeg').toLowerCase()}`, 0.95);
+      };
+
+      image.onerror = () => {
+        URL.revokeObjectURL(svgUrl);
+      };
+
+      image.src = svgUrl;
+    }
+
+    function registrarExportacionContextual() {
+      const topContainer = document.getElementById('layoutTop');
+      const sideContainer = document.getElementById('layoutSide');
+
+      if (topContainer) {
+        topContainer.addEventListener('contextmenu', (event) => {
+          event.preventDefault();
+          const nombre = construirNombreImagen('superior', 'jpeg');
+          descargarSVGComoImagen('layoutTop', nombre, 'jpeg');
+        });
+      }
+
+      if (sideContainer) {
+        sideContainer.addEventListener('contextmenu', (event) => {
+          event.preventDefault();
+          const nombre = construirNombreImagen('lateral', 'jpeg');
+          descargarSVGComoImagen('layoutSide', nombre, 'jpeg');
+        });
+      }
+    }
+
     document.addEventListener('click', function(e) {
       const dropdown = document.getElementById('dropdown');
       const search = document.getElementById('skuSearch');
@@ -953,6 +1040,7 @@
       }
     });
 
+    registrarExportacionContextual();
     cargarSkus();
   </script>
 </body>
