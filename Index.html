@@ -835,7 +835,7 @@
       const safeTotal = Math.max(1, totalLayers);
       const safeLayer = Math.min(Math.max(1, layer), safeTotal);
       const ratio = safeTotal === 1 ? 1 : (safeLayer - 1) / (safeTotal - 1);
-      const amount = Math.round(10 - (ratio * 38));
+      const amount = Math.round(6 - (ratio * 20));
       return adjustColor('#ff8500', amount);
     }
 
@@ -865,15 +865,15 @@
       const lines = edges.map(edge => {
         const p1 = points[edge[0]];
         const p2 = points[edge[1]];
-        return `<line x1="${p1.x}" y1="${p1.y}" x2="${p2.x}" y2="${p2.y}" stroke="#64748b" stroke-opacity="0.22" stroke-width="0.62"/>`;
+        return `<line x1="${p1.x}" y1="${p1.y}" x2="${p2.x}" y2="${p2.y}" stroke="#94a3b8" stroke-opacity="0.16" stroke-width="0.52"/>`;
       }).join('');
 
-      const floor = `<polygon points="${points[0].x},${points[0].y} ${points[1].x},${points[1].y} ${points[2].x},${points[2].y} ${points[3].x},${points[3].y}" fill="#e2e8f0" fill-opacity="0.12" stroke="#94a3b8" stroke-opacity="0.22" stroke-width="0.56"/>`;
+      const floor = `<polygon points="${points[0].x},${points[0].y} ${points[1].x},${points[1].y} ${points[2].x},${points[2].y} ${points[3].x},${points[3].y}" fill="#f1f5f9" fill-opacity="0.08" stroke="#cbd5e1" stroke-opacity="0.14" stroke-width="0.48"/>`;
 
       return floor + lines;
     }
 
-    function buildIsoRoll(roll, settings, offsetX, offsetY, visibleLayer, totalLayers = 1) {
+    function buildIsoRoll(roll, settings, offsetX, offsetY, visibleLayer, totalLayers = 1, focusLayer = totalLayers, maxDepth = 1) {
       if (visibleLayer !== 'all' && roll.layer !== visibleLayer) return '';
 
       const base = isoProject({ x: roll.x, y: roll.y, z: roll.z }, settings);
@@ -885,23 +885,23 @@
 
       const radiusX = Math.max(2.8, (roll.diameter * settings.scaleX) * 0.5);
       const radiusY = Math.max(2.0, (roll.diameter * settings.scaleY) * 0.5);
-      const isTopLayer = roll.layer === Math.max(1, totalLayers);
+      const isTopLayer = roll.layer === Math.max(1, focusLayer);
       const isGhostLayer = visibleLayer === 'all' && !isTopLayer;
       const isFocusedLayer = visibleLayer !== 'all';
+      const depthRatio = Math.max(0, Math.min(1, (roll.x + roll.y) / Math.max(1, maxDepth)));
+      const depthShade = Math.round(-8 * depthRatio);
 
-      const baseColor = getLayerColor(roll.layer, totalLayers);
-      const colorBody = isGhostLayer ? adjustColor(baseColor, 64) : baseColor;
+      const baseColor = adjustColor(getLayerColor(roll.layer, totalLayers), depthShade);
+      const colorBody = isGhostLayer ? adjustColor(baseColor, 90) : baseColor;
       const colorTop = isGhostLayer
-        ? adjustColor(baseColor, 82)
-        : adjustColor(colorBody, isFocusedLayer ? 24 : 18);
-      const colorStroke = isGhostLayer
-        ? adjustColor(baseColor, 90)
-        : adjustColor(colorBody, isFocusedLayer ? -30 : -24);
-      const bodyOpacity = isGhostLayer ? 0.24 : 1;
-      const topOpacity = isGhostLayer ? 0.28 : bodyOpacity;
-      const strokeWidthBody = isGhostLayer ? 0.28 : (isFocusedLayer ? 0.62 : 0.52);
-      const strokeWidthTop = isGhostLayer ? 0.32 : (isFocusedLayer ? 0.76 : 0.58);
-      const strokeOpacity = isGhostLayer ? 0.22 : (isFocusedLayer ? 0.74 : 0.56);
+        ? adjustColor(baseColor, 98)
+        : adjustColor(colorBody, isFocusedLayer ? 20 : 14);
+      const colorStroke = adjustColor(colorBody, isFocusedLayer ? -24 : -20);
+      const bodyOpacity = isGhostLayer ? 0.13 : 0.98;
+      const topOpacity = isGhostLayer ? 0.16 : 1;
+      const strokeWidthBody = isGhostLayer ? 0 : (isFocusedLayer ? 0.56 : 0.48);
+      const strokeWidthTop = isGhostLayer ? 0 : (isFocusedLayer ? 0.68 : 0.52);
+      const strokeOpacity = isGhostLayer ? 0 : (isFocusedLayer ? 0.62 : 0.5);
 
       return `
         <g>
@@ -968,10 +968,16 @@
       });
 
       const totalLayers = Math.max(1, viz.metrics.totalLayers || 1);
-      const visibleLayerLabel = visibleLayer === 'all'
-        ? `Capas: ${num(viz.metrics.totalLayers)}`
-        : `Capa activa: ${num(visibleLayer)} de ${num(viz.metrics.totalLayers)}`;
-      const rollsSvg = sortedRolls.map(r => buildIsoRoll(r, settings, offsetX, offsetY, visibleLayer, totalLayers)).join('');
+      const focusLayer = visibleLayer === 'all' ? totalLayers : visibleLayer;
+      const visibleRollsCount = visibleLayer === 'all'
+        ? viz.metrics.totalRolls
+        : sortedRolls.filter(r => r.layer === visibleLayer).length;
+      const maxDepth = sortedRolls.reduce((acc, roll) => Math.max(acc, roll.x + roll.y), 1);
+      const activeViewLabel = visibleLayer === 'all'
+        ? `Vista activa: Todas las capas · Capa destacada: ${num(focusLayer)} de ${num(viz.metrics.totalLayers)} · Rollos mostrados: ${num(visibleRollsCount)}`
+        : `Vista activa: Capa ${num(visibleLayer)} de ${num(viz.metrics.totalLayers)} · Rollos mostrados: ${num(visibleRollsCount)}`;
+      const totalLayoutLabel = `Total del acomodo: ${num(viz.metrics.totalRolls)} rollos`;
+      const rollsSvg = sortedRolls.map(r => buildIsoRoll(r, settings, offsetX, offsetY, visibleLayer, totalLayers, focusLayer, maxDepth)).join('');
       const boxSvg = buildIsoBoxWireframe(viz, settings, offsetX, offsetY);
 
       return `
@@ -980,20 +986,27 @@
           ${boxSvg}
           ${rollsSvg}
           <text x="22" y="26" font-size="13" font-weight="700" fill="#1f2937">Vista isométrica · ${escapeHtml(viz.metrics.pattern)}</text>
-          <text x="22" y="604" font-size="12" fill="#3b4654">${visibleLayerLabel} · Rollos: ${num(viz.metrics.totalRolls)}</text>
-          <text x="350" y="604" font-size="12" fill="#ff8500" font-weight="700">Ocupación: ${(viz.metrics.occupancyRatio * 100).toFixed(2)}%</text>
+          <text x="22" y="600" font-size="12" fill="#3b4654">${activeViewLabel}</text>
+          <text x="22" y="616" font-size="12" fill="#64748b">${totalLayoutLabel}</text>
+          <text x="650" y="608" text-anchor="end" font-size="12" fill="#ff8500" font-weight="700">Ocupación: ${(viz.metrics.occupancyRatio * 100).toFixed(2)}%</text>
         </svg>
       `;
     }
 
     function buildLayerSelector(viz, selectedLayer) {
-      const options = [`<option value="all"${selectedLayer === 'all' ? ' selected' : ''}>Todas las capas</option>`];
-      for (let layer = 1; layer <= viz.metrics.totalLayers; layer++) {
+      const totalLayers = Math.max(1, valorNumericoSeguro(viz?.metrics?.totalLayers, 1));
+      const topLayer = totalLayers;
+      const options = [
+        `<option value="${topLayer}"${selectedLayer === topLayer ? ' selected' : ''}>Capa superior (recomendada)</option>`
+      ];
+      for (let layer = 1; layer <= totalLayers; layer++) {
+        if (layer === topLayer) continue;
         options.push(`<option value="${layer}"${selectedLayer === layer ? ' selected' : ''}>Capa ${layer}</option>`);
       }
+      options.push(`<option value="all"${selectedLayer === 'all' ? ' selected' : ''}>Todas las capas (contexto)</option>`);
 
       return `
-        <label for="layerSelect"><b>Capa visible:</b></label>
+        <label for="layerSelect"><b>Modo de vista:</b></label>
         <select id="layerSelect" style="margin-left:6px;min-height:28px;border:1px solid #d0d7e2;border-radius:6px;padding:2px 6px;background:#fff;">
           ${options.join('')}
         </select>
@@ -1004,9 +1017,9 @@
       const node = document.getElementById('isoMetrics');
       if (!node) return;
       node.innerHTML = `
-        <b>Métricas isométricas:</b>
-        Total rollos ${num(viz.metrics.totalRolls)} ·
-        Capas ${num(viz.metrics.totalLayers)} ·
+        <b>Lectura isométrica:</b>
+        Capas disponibles ${num(viz.metrics.totalLayers)} ·
+        Total del acomodo ${num(viz.metrics.totalRolls)} rollos ·
         Ocupación ${(viz.metrics.occupancyRatio * 100).toFixed(2)}% ·
         Volumen usado ${num(viz.metrics.usedVolume)} mm³
       `;
