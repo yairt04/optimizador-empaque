@@ -858,24 +858,27 @@
 
       const edges = [
         [0, 1], [1, 2], [2, 3], [3, 0],
-        [4, 5], [5, 6], [6, 7], [7, 4],
-        [0, 4], [1, 5], [2, 6], [3, 7]
+        [0, 4], [1, 5], [2, 6], [3, 7],
+        [4, 5], [7, 4]
       ];
 
       const lines = edges.map(edge => {
         const p1 = points[edge[0]];
         const p2 = points[edge[1]];
-        return `<line x1="${p1.x}" y1="${p1.y}" x2="${p2.x}" y2="${p2.y}" stroke="#94a3b8" stroke-opacity="0.16" stroke-width="0.52"/>`;
+        return `<line x1="${p1.x}" y1="${p1.y}" x2="${p2.x}" y2="${p2.y}" stroke="#94a3b8" stroke-opacity="0.10" stroke-width="0.46"/>`;
       }).join('');
 
-      const floor = `<polygon points="${points[0].x},${points[0].y} ${points[1].x},${points[1].y} ${points[2].x},${points[2].y} ${points[3].x},${points[3].y}" fill="#f1f5f9" fill-opacity="0.08" stroke="#cbd5e1" stroke-opacity="0.14" stroke-width="0.48"/>`;
+      const floor = `<polygon points="${points[0].x},${points[0].y} ${points[1].x},${points[1].y} ${points[2].x},${points[2].y} ${points[3].x},${points[3].y}" fill="#f8fafc" fill-opacity="0.05" stroke="#cbd5e1" stroke-opacity="0.08" stroke-width="0.42"/>`;
 
       return floor + lines;
     }
 
-    function buildIsoRoll(roll, settings, offsetX, offsetY, visibleLayer, totalLayers = 1, focusLayer = totalLayers, maxDepth = 1) {
-      if (visibleLayer !== 'all' && roll.layer !== visibleLayer) return '';
+    function getDepthShade(roll, maxDepth = 1) {
+      const depthRatio = Math.max(0, Math.min(1, (roll.x + roll.y) / Math.max(1, maxDepth)));
+      return Math.round(6 - (depthRatio * 12));
+    }
 
+    function buildIsoRollActive(roll, settings, offsetX, offsetY, totalLayers = 1, maxDepth = 1) {
       const base = isoProject({ x: roll.x, y: roll.y, z: roll.z }, settings);
       const top = isoProject({ x: roll.x, y: roll.y, z: roll.z + roll.length }, settings);
       const cxBase = offsetX + base.x;
@@ -885,31 +888,41 @@
 
       const radiusX = Math.max(2.8, (roll.diameter * settings.scaleX) * 0.5);
       const radiusY = Math.max(2.0, (roll.diameter * settings.scaleY) * 0.5);
-      const isTopLayer = roll.layer === Math.max(1, focusLayer);
-      const isGhostLayer = visibleLayer === 'all' && !isTopLayer;
-      const isFocusedLayer = visibleLayer !== 'all';
-      const depthRatio = Math.max(0, Math.min(1, (roll.x + roll.y) / Math.max(1, maxDepth)));
-      const depthShade = Math.round(-8 * depthRatio);
-
-      const baseColor = adjustColor(getLayerColor(roll.layer, totalLayers), depthShade);
-      const colorBody = isGhostLayer ? adjustColor(baseColor, 90) : baseColor;
-      const colorTop = isGhostLayer
-        ? adjustColor(baseColor, 98)
-        : adjustColor(colorBody, isFocusedLayer ? 20 : 14);
-      const colorStroke = adjustColor(colorBody, isFocusedLayer ? -24 : -20);
-      const bodyOpacity = isGhostLayer ? 0.13 : 0.98;
-      const topOpacity = isGhostLayer ? 0.16 : 1;
-      const strokeWidthBody = isGhostLayer ? 0 : (isFocusedLayer ? 0.56 : 0.48);
-      const strokeWidthTop = isGhostLayer ? 0 : (isFocusedLayer ? 0.68 : 0.52);
-      const strokeOpacity = isGhostLayer ? 0 : (isFocusedLayer ? 0.62 : 0.5);
+      const depthShade = getDepthShade(roll, maxDepth);
+      const bodyColor = adjustColor(getLayerColor(roll.layer, totalLayers), depthShade);
+      const topColor = adjustColor(bodyColor, 18);
+      const strokeColor = adjustColor(bodyColor, -24);
 
       return `
         <g>
-          <path d="M ${cxBase - radiusX} ${cyBase} L ${cxTop - radiusX} ${cyTop} A ${radiusX} ${radiusY} 0 0 1 ${cxTop + radiusX} ${cyTop} L ${cxBase + radiusX} ${cyBase} A ${radiusX} ${radiusY} 0 0 0 ${cxBase - radiusX} ${cyBase} Z" fill="${colorBody}" fill-opacity="${bodyOpacity}" stroke="${colorStroke}" stroke-opacity="${strokeOpacity}" stroke-width="${strokeWidthBody}"/>
-          <ellipse cx="${cxTop}" cy="${cyTop}" rx="${radiusX}" ry="${radiusY}" fill="${colorTop}" fill-opacity="${topOpacity}" stroke="${colorStroke}" stroke-opacity="${strokeOpacity}" stroke-width="${strokeWidthTop}"/>
+          <path d="M ${cxBase - radiusX} ${cyBase} L ${cxTop - radiusX} ${cyTop} A ${radiusX} ${radiusY} 0 0 1 ${cxTop + radiusX} ${cyTop} L ${cxBase + radiusX} ${cyBase} A ${radiusX} ${radiusY} 0 0 0 ${cxBase - radiusX} ${cyBase} Z" fill="${bodyColor}" fill-opacity="0.98" stroke="${strokeColor}" stroke-opacity="0.52" stroke-width="0.50"/>
+          <ellipse cx="${cxTop}" cy="${cyTop}" rx="${radiusX}" ry="${radiusY}" fill="${topColor}" fill-opacity="1" stroke="${strokeColor}" stroke-opacity="0.58" stroke-width="0.62"/>
           <title>${escapeHtml(roll.id)} · Capa ${roll.layer}</title>
         </g>
       `;
+    }
+
+    function buildIsoRollGhost(roll, settings, offsetX, offsetY, totalLayers = 1) {
+      const top = isoProject({ x: roll.x, y: roll.y, z: roll.z + roll.length }, settings);
+      const cxTop = offsetX + top.x;
+      const cyTop = offsetY + top.y;
+      const radiusX = Math.max(2.8, (roll.diameter * settings.scaleX) * 0.5);
+      const radiusY = Math.max(2.0, (roll.diameter * settings.scaleY) * 0.5);
+      const ghostColor = adjustColor(getLayerColor(roll.layer, totalLayers), 82);
+
+      return `
+        <g>
+          <ellipse cx="${cxTop}" cy="${cyTop}" rx="${radiusX}" ry="${radiusY}" fill="${ghostColor}" fill-opacity="0.22"/>
+          <title>${escapeHtml(roll.id)} · Capa ${roll.layer} (contexto)</title>
+        </g>
+      `;
+    }
+
+    function getViewModeLabel(visibleLayer, focusLayer, totalLayers, visibleRollsCount) {
+      if (visibleLayer === 'all') {
+        return `Vista activa: Todas las capas (contexto) · Capa destacada: ${num(focusLayer)} de ${num(totalLayers)} · Rollos mostrados completos: ${num(visibleRollsCount)} · Contexto visual: capas inferiores`;
+      }
+      return `Vista activa: Capa ${num(visibleLayer)} de ${num(totalLayers)} · Rollos mostrados: ${num(visibleRollsCount)}`;
     }
 
     function buildIsoSvg(viz, visibleLayer = 'all') {
@@ -970,14 +983,20 @@
       const totalLayers = Math.max(1, viz.metrics.totalLayers || 1);
       const focusLayer = visibleLayer === 'all' ? totalLayers : visibleLayer;
       const visibleRollsCount = visibleLayer === 'all'
-        ? viz.metrics.totalRolls
+        ? sortedRolls.filter(r => r.layer === focusLayer).length
         : sortedRolls.filter(r => r.layer === visibleLayer).length;
       const maxDepth = sortedRolls.reduce((acc, roll) => Math.max(acc, roll.x + roll.y), 1);
-      const activeViewLabel = visibleLayer === 'all'
-        ? `Vista activa: Todas las capas · Capa destacada: ${num(focusLayer)} de ${num(viz.metrics.totalLayers)} · Rollos mostrados: ${num(visibleRollsCount)}`
-        : `Vista activa: Capa ${num(visibleLayer)} de ${num(viz.metrics.totalLayers)} · Rollos mostrados: ${num(visibleRollsCount)}`;
+      const activeViewLabel = getViewModeLabel(visibleLayer, focusLayer, totalLayers, visibleRollsCount);
       const totalLayoutLabel = `Total del acomodo: ${num(viz.metrics.totalRolls)} rollos`;
-      const rollsSvg = sortedRolls.map(r => buildIsoRoll(r, settings, offsetX, offsetY, visibleLayer, totalLayers, focusLayer, maxDepth)).join('');
+      const rollsSvg = sortedRolls.map(r => {
+        if (visibleLayer === 'all') {
+          if (r.layer === focusLayer) return buildIsoRollActive(r, settings, offsetX, offsetY, totalLayers, maxDepth);
+          if (r.layer < focusLayer) return buildIsoRollGhost(r, settings, offsetX, offsetY, totalLayers);
+          return '';
+        }
+        if (r.layer !== visibleLayer) return '';
+        return buildIsoRollActive(r, settings, offsetX, offsetY, totalLayers, maxDepth);
+      }).join('');
       const boxSvg = buildIsoBoxWireframe(viz, settings, offsetX, offsetY);
 
       return `
