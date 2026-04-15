@@ -857,16 +857,18 @@
       const edges = [
         [0, 1], [1, 2], [2, 3], [3, 0],
         [0, 4], [1, 5], [2, 6], [3, 7],
-        [4, 5], [7, 4]
+        [4, 5], [5, 6], [6, 7], [7, 4]
       ];
 
       const lines = edges.map(edge => {
         const p1 = points[edge[0]];
         const p2 = points[edge[1]];
-        return `<line x1="${p1.x}" y1="${p1.y}" x2="${p2.x}" y2="${p2.y}" stroke="#64748b" stroke-opacity="0.24" stroke-width="0.62"/>`;
+        const isTopEdge = edge[0] >= 4 && edge[1] >= 4;
+        const opacity = isTopEdge ? 0.44 : 0.36;
+        return `<line x1="${p1.x}" y1="${p1.y}" x2="${p2.x}" y2="${p2.y}" stroke="#64748b" stroke-opacity="${opacity}" stroke-width="0.70"/>`;
       }).join('');
 
-      const floor = `<polygon points="${points[0].x},${points[0].y} ${points[1].x},${points[1].y} ${points[2].x},${points[2].y} ${points[3].x},${points[3].y}" fill="#e2e8f0" fill-opacity="0.16" stroke="#94a3b8" stroke-opacity="0.20" stroke-width="0.58"/>`;
+      const floor = `<polygon points="${points[0].x},${points[0].y} ${points[1].x},${points[1].y} ${points[2].x},${points[2].y} ${points[3].x},${points[3].y}" fill="#cbd5e1" fill-opacity="0.24" stroke="#64748b" stroke-opacity="0.36" stroke-width="0.66"/>`;
 
       return floor + lines;
     }
@@ -969,12 +971,6 @@
       `;
     }
 
-    function getColumnHeight(column, compressionFactor = 1) {
-      const totalLevels = Math.max(1, valorNumericoSeguro(column?.totalLevels, 1));
-      const rollLength = Math.max(1, valorNumericoSeguro(column?.rollLength, 1));
-      return totalLevels * rollLength * Math.max(0.7, valorNumericoSeguro(compressionFactor, 1));
-    }
-
     function groupRollsIntoColumns(rolls) {
       const grouped = new Map();
       const safeRolls = Array.isArray(rolls) ? rolls : [];
@@ -990,10 +986,10 @@
         if (!grouped.has(key)) {
           grouped.set(key, {
             key,
-            baseX: valorNumericoSeguro(roll?.x, 0),
-            baseY: valorNumericoSeguro(roll?.y, 0),
+            x: valorNumericoSeguro(roll?.x, 0),
+            y: valorNumericoSeguro(roll?.y, 0),
             diameter: Math.max(0, valorNumericoSeguro(roll?.diameter, 0)),
-            rollLength: Math.max(1, valorNumericoSeguro(roll?.length, 1)),
+            unitHeight: Math.max(1, valorNumericoSeguro(roll?.length, 1)),
             orientation: roll?.orientation || 'z',
             layers: new Set(),
             rollsCount: 0,
@@ -1002,18 +998,24 @@
         }
 
         const column = grouped.get(key);
-        column.rollLength = Math.max(column.rollLength, Math.max(1, valorNumericoSeguro(roll?.length, 1)));
+        column.unitHeight = Math.max(column.unitHeight, Math.max(1, valorNumericoSeguro(roll?.length, 1)));
         column.layers.add(Math.max(1, valorNumericoSeguro(roll?.layer, 1)));
         column.rollsCount += 1;
       });
 
       return [...grouped.values()].map((column) => {
-        const totalLevels = Math.max(1, column.layers.size);
+        const levels = Math.max(1, column.rollsCount);
+        const totalHeight = levels * column.unitHeight;
         return {
           ...column,
-          totalLevels,
-          z: 0,
-          height: getColumnHeight(column)
+          baseX: column.x,
+          baseY: column.y,
+          zBase: 0,
+          levels,
+          totalLevels: levels,
+          totalHeight,
+          height: totalHeight,
+          rollLength: column.unitHeight
         };
       }).sort((a, b) => {
         const depthA = (a.baseX + a.baseY);
@@ -1025,8 +1027,10 @@
     }
 
     function buildIsoStackedTubeColumn(column, settings, offsetX, offsetY, maxDepth = 1) {
-      const base = isoProject({ x: column.baseX, y: column.baseY, z: column.z }, settings);
-      const top = isoProject({ x: column.baseX, y: column.baseY, z: column.z + column.height }, settings);
+      const zBase = Math.max(0, valorNumericoSeguro(column?.zBase, 0));
+      const zTop = zBase + Math.max(1, valorNumericoSeguro(column?.totalHeight, column?.height || 1));
+      const base = isoProject({ x: column.baseX, y: column.baseY, z: zBase }, settings);
+      const top = isoProject({ x: column.baseX, y: column.baseY, z: zTop }, settings);
       const cxBase = offsetX + base.x;
       const cyBase = offsetY + base.y;
       const cxTop = offsetX + top.x;
@@ -1060,7 +1064,7 @@
           ${buildIsoTubeOuterWall(topPoint, basePoint, radiusX, radiusY, colors)}
           ${buildTubeInnerHint(topPoint, basePoint, innerRx, innerRy, colors)}
           ${buildTubeTopRing(cxTop, cyTop, radiusX, radiusY, innerRx, innerRy, colors)}
-          <title>${escapeHtml(column.sampleId || column.key)} · Columna completa · Niveles ${column.totalLevels} · Rollos ${column.rollsCount}</title>
+          <title>${escapeHtml(column.sampleId || column.key)} · Columna completa · Niveles ${column.levels} · Rollos ${column.rollsCount}</title>
         </g>
       `;
     }
@@ -1093,7 +1097,7 @@
     }
 
     function getAllLayersViewDescription(totalLayers, totalRolls, totalColumns) {
-      return `Vista activa: Todas las capas · Representación: columnas completas por posición · Niveles simulados: ${num(totalLayers)} · Columnas visibles: ${num(totalColumns)} · Total del acomodo: ${num(totalRolls)} rollos`;
+      return `Vista activa: Todas las capas · Representación: columnas completas por posición · Altura simulada por columna: niveles × ancho efectivo · Niveles simulados: ${num(totalLayers)} · Columnas visibles: ${num(totalColumns)} · Total del acomodo: ${num(totalRolls)} rollos`;
     }
 
     function getViewModeLabel(visibleLayer, focusLayer, totalLayers, visibleRollsCount, totalRolls, totalColumns = 0) {
@@ -1123,7 +1127,7 @@
       const baseSettings = {
         scaleX: 360 / maxDim,
         scaleY: 190 / maxDim,
-        scaleZ: 300 / maxDim
+        scaleZ: 380 / maxDim
       };
 
       const padding = { left: 28, right: 28, top: 48, bottom: 60 };
@@ -1137,8 +1141,8 @@
         ? allLayerColumns.map(column => ({
           x: column.baseX,
           y: column.baseY,
-          z: column.z,
-          length: column.height,
+          z: column.zBase,
+          length: column.totalHeight,
           diameter: column.diameter
         }))
         : rollsForView.map(item => item.roll);
@@ -1147,11 +1151,12 @@
       const sceneWidth = Math.max(1, baseBounds.maxX - baseBounds.minX);
       const sceneHeight = Math.max(1, baseBounds.maxY - baseBounds.minY);
       const fitScale = Math.min(1.28, Math.max(0.72, Math.min(availableWidth / sceneWidth, availableHeight / sceneHeight)));
+      const verticalBoost = visibleLayer === 'all' ? 1.14 : 1.06;
 
       const settings = {
         scaleX: baseSettings.scaleX * fitScale,
         scaleY: baseSettings.scaleY * fitScale,
-        scaleZ: baseSettings.scaleZ * fitScale
+        scaleZ: baseSettings.scaleZ * fitScale * verticalBoost
       };
 
       const finalBounds = getIsoSceneBounds(viz, settings, rollsForBounds);
