@@ -835,7 +835,7 @@
       const safeTotal = Math.max(1, totalLayers);
       const safeLayer = Math.min(Math.max(1, layer), safeTotal);
       const ratio = safeTotal === 1 ? 1 : (safeLayer - 1) / (safeTotal - 1);
-      const amount = Math.round(20 - (ratio * 46));
+      const amount = Math.round(10 - (ratio * 38));
       return adjustColor('#ff8500', amount);
     }
 
@@ -889,18 +889,24 @@
       const isGhostLayer = visibleLayer === 'all' && !isTopLayer;
       const isFocusedLayer = visibleLayer !== 'all';
 
-      const colorBody = isGhostLayer ? '#cbd5e1' : getLayerColor(roll.layer, totalLayers);
-      const colorTop = isGhostLayer ? '#dbe4ef' : adjustColor(colorBody, isFocusedLayer ? 24 : 18);
-      const colorStroke = isGhostLayer ? 'none' : adjustColor(colorBody, isFocusedLayer ? -30 : -24);
-      const bodyOpacity = isGhostLayer ? 0.15 : 1;
-      const strokeWidthBody = isGhostLayer ? 0 : (isFocusedLayer ? 0.62 : 0.52);
-      const strokeWidthTop = isGhostLayer ? 0 : (isFocusedLayer ? 0.76 : 0.58);
-      const strokeOpacity = isGhostLayer ? 0 : (isFocusedLayer ? 0.74 : 0.56);
+      const baseColor = getLayerColor(roll.layer, totalLayers);
+      const colorBody = isGhostLayer ? adjustColor(baseColor, 64) : baseColor;
+      const colorTop = isGhostLayer
+        ? adjustColor(baseColor, 82)
+        : adjustColor(colorBody, isFocusedLayer ? 24 : 18);
+      const colorStroke = isGhostLayer
+        ? adjustColor(baseColor, 90)
+        : adjustColor(colorBody, isFocusedLayer ? -30 : -24);
+      const bodyOpacity = isGhostLayer ? 0.24 : 1;
+      const topOpacity = isGhostLayer ? 0.28 : bodyOpacity;
+      const strokeWidthBody = isGhostLayer ? 0.28 : (isFocusedLayer ? 0.62 : 0.52);
+      const strokeWidthTop = isGhostLayer ? 0.32 : (isFocusedLayer ? 0.76 : 0.58);
+      const strokeOpacity = isGhostLayer ? 0.22 : (isFocusedLayer ? 0.74 : 0.56);
 
       return `
         <g>
           <path d="M ${cxBase - radiusX} ${cyBase} L ${cxTop - radiusX} ${cyTop} A ${radiusX} ${radiusY} 0 0 1 ${cxTop + radiusX} ${cyTop} L ${cxBase + radiusX} ${cyBase} A ${radiusX} ${radiusY} 0 0 0 ${cxBase - radiusX} ${cyBase} Z" fill="${colorBody}" fill-opacity="${bodyOpacity}" stroke="${colorStroke}" stroke-opacity="${strokeOpacity}" stroke-width="${strokeWidthBody}"/>
-          <ellipse cx="${cxTop}" cy="${cyTop}" rx="${radiusX}" ry="${radiusY}" fill="${colorTop}" fill-opacity="${bodyOpacity}" stroke="${colorStroke}" stroke-opacity="${strokeOpacity}" stroke-width="${strokeWidthTop}"/>
+          <ellipse cx="${cxTop}" cy="${cyTop}" rx="${radiusX}" ry="${radiusY}" fill="${colorTop}" fill-opacity="${topOpacity}" stroke="${colorStroke}" stroke-opacity="${strokeOpacity}" stroke-width="${strokeWidthTop}"/>
           <title>${escapeHtml(roll.id)} · Capa ${roll.layer}</title>
         </g>
       `;
