@@ -863,10 +863,10 @@
       const lines = edges.map(edge => {
         const p1 = points[edge[0]];
         const p2 = points[edge[1]];
-        return `<line x1="${p1.x}" y1="${p1.y}" x2="${p2.x}" y2="${p2.y}" stroke="#94a3b8" stroke-opacity="0.10" stroke-width="0.46"/>`;
+        return `<line x1="${p1.x}" y1="${p1.y}" x2="${p2.x}" y2="${p2.y}" stroke="#94a3b8" stroke-opacity="0.07" stroke-width="0.40"/>`;
       }).join('');
 
-      const floor = `<polygon points="${points[0].x},${points[0].y} ${points[1].x},${points[1].y} ${points[2].x},${points[2].y} ${points[3].x},${points[3].y}" fill="#f8fafc" fill-opacity="0.05" stroke="#cbd5e1" stroke-opacity="0.08" stroke-width="0.42"/>`;
+      const floor = `<polygon points="${points[0].x},${points[0].y} ${points[1].x},${points[1].y} ${points[2].x},${points[2].y} ${points[3].x},${points[3].y}" fill="#f8fafc" fill-opacity="0.035" stroke="#cbd5e1" stroke-opacity="0.05" stroke-width="0.36"/>`;
 
       return floor + lines;
     }
@@ -876,7 +876,37 @@
       return Math.round(6 - (depthRatio * 12));
     }
 
-    function buildIsoRollActive(roll, settings, offsetX, offsetY, totalLayers = 1, maxDepth = 1) {
+    function getTubeInnerRatio(roll) {
+      const diameter = Math.max(0, valorNumericoSeguro(roll?.diameter, 0));
+      if (diameter <= 0) return 0.58;
+      if (diameter < 80) return 0.56;
+      if (diameter > 220) return 0.60;
+      return 0.58;
+    }
+
+    function buildIsoTubeOuterWall(top, base, radiusX, radiusY, colors) {
+      return `
+        <path d="M ${base.x - radiusX} ${base.y} L ${top.x - radiusX} ${top.y} A ${radiusX} ${radiusY} 0 0 1 ${top.x + radiusX} ${top.y} L ${base.x + radiusX} ${base.y} A ${radiusX} ${radiusY} 0 0 0 ${base.x - radiusX} ${base.y} Z" fill="${colors.body}" fill-opacity="0.96" stroke="${colors.stroke}" stroke-opacity="0.50" stroke-width="0.48"/>
+      `;
+    }
+
+    function buildTubeTopRing(cx, cy, radiusX, radiusY, innerRx, innerRy, colors) {
+      return `
+        <ellipse cx="${cx}" cy="${cy}" rx="${radiusX}" ry="${radiusY}" fill="${colors.ring}" fill-opacity="1" stroke="${colors.stroke}" stroke-opacity="0.58" stroke-width="0.62"/>
+        <ellipse cx="${cx}" cy="${cy}" rx="${innerRx}" ry="${innerRy}" fill="${colors.hole}" fill-opacity="1" stroke="${colors.innerStroke}" stroke-opacity="0.62" stroke-width="0.42"/>
+      `;
+    }
+
+    function buildTubeInnerHint(top, base, innerRx, innerRy, colors) {
+      const hintX = innerRx * 0.92;
+      return `
+        <path d="M ${base.x + hintX} ${base.y} L ${top.x + hintX} ${top.y}" stroke="${colors.innerHint}" stroke-opacity="0.38" stroke-width="0.42"/>
+        <path d="M ${base.x - hintX} ${base.y} L ${top.x - hintX} ${top.y}" stroke="${colors.innerHint}" stroke-opacity="0.24" stroke-width="0.38"/>
+        <ellipse cx="${base.x}" cy="${base.y}" rx="${innerRx}" ry="${innerRy}" fill="none" stroke="${colors.innerHint}" stroke-opacity="0.18" stroke-width="0.34"/>
+      `;
+    }
+
+    function buildIsoTubeActive(roll, settings, offsetX, offsetY, totalLayers = 1, maxDepth = 1) {
       const base = isoProject({ x: roll.x, y: roll.y, z: roll.z }, settings);
       const top = isoProject({ x: roll.x, y: roll.y, z: roll.z + roll.length }, settings);
       const cxBase = offsetX + base.x;
@@ -886,31 +916,54 @@
 
       const radiusX = Math.max(2.8, (roll.diameter * settings.scaleX) * 0.5);
       const radiusY = Math.max(2.0, (roll.diameter * settings.scaleY) * 0.5);
+      const innerRatio = getTubeInnerRatio(roll);
+      const innerRx = Math.max(1.4, radiusX * innerRatio);
+      const innerRy = Math.max(1.0, radiusY * innerRatio);
       const depthShade = getDepthShade(roll, maxDepth);
       const bodyColor = adjustColor(getLayerColor(roll.layer, totalLayers), depthShade);
-      const topColor = adjustColor(bodyColor, 18);
       const strokeColor = adjustColor(bodyColor, -24);
+      const ringColor = adjustColor(bodyColor, 20);
+      const holeColor = adjustColor(bodyColor, 75);
+      const innerStroke = adjustColor(bodyColor, 14);
+      const innerHint = adjustColor(bodyColor, -4);
+      const topPoint = { x: cxTop, y: cyTop };
+      const basePoint = { x: cxBase, y: cyBase };
+      const colors = {
+        body: bodyColor,
+        stroke: strokeColor,
+        ring: ringColor,
+        hole: holeColor,
+        innerStroke,
+        innerHint
+      };
 
       return `
         <g>
-          <path d="M ${cxBase - radiusX} ${cyBase} L ${cxTop - radiusX} ${cyTop} A ${radiusX} ${radiusY} 0 0 1 ${cxTop + radiusX} ${cyTop} L ${cxBase + radiusX} ${cyBase} A ${radiusX} ${radiusY} 0 0 0 ${cxBase - radiusX} ${cyBase} Z" fill="${bodyColor}" fill-opacity="0.98" stroke="${strokeColor}" stroke-opacity="0.52" stroke-width="0.50"/>
-          <ellipse cx="${cxTop}" cy="${cyTop}" rx="${radiusX}" ry="${radiusY}" fill="${topColor}" fill-opacity="1" stroke="${strokeColor}" stroke-opacity="0.58" stroke-width="0.62"/>
+          ${buildIsoTubeOuterWall(topPoint, basePoint, radiusX, radiusY, colors)}
+          ${buildTubeInnerHint(topPoint, basePoint, innerRx, innerRy, colors)}
+          ${buildTubeTopRing(cxTop, cyTop, radiusX, radiusY, innerRx, innerRy, colors)}
           <title>${escapeHtml(roll.id)} · Capa ${roll.layer}</title>
         </g>
       `;
     }
 
-    function buildIsoRollGhost(roll, settings, offsetX, offsetY, totalLayers = 1) {
+    function buildIsoTubeGhost(roll, settings, offsetX, offsetY, totalLayers = 1) {
       const top = isoProject({ x: roll.x, y: roll.y, z: roll.z + roll.length }, settings);
       const cxTop = offsetX + top.x;
       const cyTop = offsetY + top.y;
       const radiusX = Math.max(2.8, (roll.diameter * settings.scaleX) * 0.5);
       const radiusY = Math.max(2.0, (roll.diameter * settings.scaleY) * 0.5);
+      const innerRatio = getTubeInnerRatio(roll);
+      const innerRx = Math.max(1.4, radiusX * innerRatio);
+      const innerRy = Math.max(1.0, radiusY * innerRatio);
       const ghostColor = adjustColor(getLayerColor(roll.layer, totalLayers), 82);
+      const ghostInner = adjustColor(ghostColor, 22);
+      const ghostStroke = adjustColor(ghostColor, -24);
 
       return `
         <g>
-          <ellipse cx="${cxTop}" cy="${cyTop}" rx="${radiusX}" ry="${radiusY}" fill="${ghostColor}" fill-opacity="0.22"/>
+          <ellipse cx="${cxTop}" cy="${cyTop}" rx="${radiusX}" ry="${radiusY}" fill="${ghostColor}" fill-opacity="0.18" stroke="${ghostStroke}" stroke-opacity="0.18" stroke-width="0.34"/>
+          <ellipse cx="${cxTop}" cy="${cyTop}" rx="${innerRx}" ry="${innerRy}" fill="${ghostInner}" fill-opacity="0.65" stroke="${ghostStroke}" stroke-opacity="0.10" stroke-width="0.24"/>
           <title>${escapeHtml(roll.id)} · Capa ${roll.layer} (contexto)</title>
         </g>
       `;
@@ -1006,9 +1059,9 @@
       const totalLayoutLabel = `Total del acomodo: ${num(viz.metrics.totalRolls)} rollos`;
       const rollsSvg = rollsForView.map(item => {
         if (item.renderMode === 'active') {
-          return buildIsoRollActive(item.roll, settings, offsetX, offsetY, totalLayers, maxDepth);
+          return buildIsoTubeActive(item.roll, settings, offsetX, offsetY, totalLayers, maxDepth);
         }
-        return buildIsoRollGhost(item.roll, settings, offsetX, offsetY, totalLayers);
+        return buildIsoTubeGhost(item.roll, settings, offsetX, offsetY, totalLayers);
       }).join('');
       const boxSvg = buildIsoBoxWireframe(viz, settings, offsetX, offsetY);
 
