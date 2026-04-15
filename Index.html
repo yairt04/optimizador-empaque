@@ -865,10 +865,10 @@
       const lines = edges.map(edge => {
         const p1 = points[edge[0]];
         const p2 = points[edge[1]];
-        return `<line x1="${p1.x}" y1="${p1.y}" x2="${p2.x}" y2="${p2.y}" stroke="#64748b" stroke-opacity="0.36" stroke-width="0.9"/>`;
+        return `<line x1="${p1.x}" y1="${p1.y}" x2="${p2.x}" y2="${p2.y}" stroke="#64748b" stroke-opacity="0.22" stroke-width="0.62"/>`;
       }).join('');
 
-      const floor = `<polygon points="${points[0].x},${points[0].y} ${points[1].x},${points[1].y} ${points[2].x},${points[2].y} ${points[3].x},${points[3].y}" fill="#e2e8f0" fill-opacity="0.18" stroke="#94a3b8" stroke-opacity="0.16" stroke-width="0.7"/>`;
+      const floor = `<polygon points="${points[0].x},${points[0].y} ${points[1].x},${points[1].y} ${points[2].x},${points[2].y} ${points[3].x},${points[3].y}" fill="#e2e8f0" fill-opacity="0.12" stroke="#94a3b8" stroke-opacity="0.22" stroke-width="0.56"/>`;
 
       return floor + lines;
     }
@@ -885,16 +885,22 @@
 
       const radiusX = Math.max(2.8, (roll.diameter * settings.scaleX) * 0.5);
       const radiusY = Math.max(2.0, (roll.diameter * settings.scaleY) * 0.5);
-      const colorBody = getLayerColor(roll.layer, totalLayers);
-      const colorTop = adjustColor(colorBody, 18);
-      const colorStroke = adjustColor(colorBody, -26);
-      const colorBottom = adjustColor(colorBody, -12);
+      const isTopLayer = roll.layer === Math.max(1, totalLayers);
+      const isGhostLayer = visibleLayer === 'all' && !isTopLayer;
+      const isFocusedLayer = visibleLayer !== 'all';
+
+      const colorBody = isGhostLayer ? '#cbd5e1' : getLayerColor(roll.layer, totalLayers);
+      const colorTop = isGhostLayer ? '#dbe4ef' : adjustColor(colorBody, isFocusedLayer ? 24 : 18);
+      const colorStroke = isGhostLayer ? 'none' : adjustColor(colorBody, isFocusedLayer ? -30 : -24);
+      const bodyOpacity = isGhostLayer ? 0.15 : 1;
+      const strokeWidthBody = isGhostLayer ? 0 : (isFocusedLayer ? 0.62 : 0.52);
+      const strokeWidthTop = isGhostLayer ? 0 : (isFocusedLayer ? 0.76 : 0.58);
+      const strokeOpacity = isGhostLayer ? 0 : (isFocusedLayer ? 0.74 : 0.56);
 
       return `
         <g>
-          <path d="M ${cxBase - radiusX} ${cyBase} L ${cxTop - radiusX} ${cyTop} A ${radiusX} ${radiusY} 0 0 1 ${cxTop + radiusX} ${cyTop} L ${cxBase + radiusX} ${cyBase} A ${radiusX} ${radiusY} 0 0 0 ${cxBase - radiusX} ${cyBase} Z" fill="${colorBody}" stroke="${colorStroke}" stroke-opacity="0.66" stroke-width="0.85"/>
-          <ellipse cx="${cxTop}" cy="${cyTop}" rx="${radiusX}" ry="${radiusY}" fill="${colorTop}" stroke="${colorStroke}" stroke-width="0.95"/>
-          <ellipse cx="${cxBase}" cy="${cyBase}" rx="${radiusX}" ry="${radiusY}" fill="${colorBottom}" fill-opacity="0.12" stroke="${colorStroke}" stroke-opacity="0.22" stroke-width="0.6"/>
+          <path d="M ${cxBase - radiusX} ${cyBase} L ${cxTop - radiusX} ${cyTop} A ${radiusX} ${radiusY} 0 0 1 ${cxTop + radiusX} ${cyTop} L ${cxBase + radiusX} ${cyBase} A ${radiusX} ${radiusY} 0 0 0 ${cxBase - radiusX} ${cyBase} Z" fill="${colorBody}" fill-opacity="${bodyOpacity}" stroke="${colorStroke}" stroke-opacity="${strokeOpacity}" stroke-width="${strokeWidthBody}"/>
+          <ellipse cx="${cxTop}" cy="${cyTop}" rx="${radiusX}" ry="${radiusY}" fill="${colorTop}" fill-opacity="${bodyOpacity}" stroke="${colorStroke}" stroke-opacity="${strokeOpacity}" stroke-width="${strokeWidthTop}"/>
           <title>${escapeHtml(roll.id)} · Capa ${roll.layer}</title>
         </g>
       `;
@@ -956,6 +962,9 @@
       });
 
       const totalLayers = Math.max(1, viz.metrics.totalLayers || 1);
+      const visibleLayerLabel = visibleLayer === 'all'
+        ? `Capas: ${num(viz.metrics.totalLayers)}`
+        : `Capa activa: ${num(visibleLayer)} de ${num(viz.metrics.totalLayers)}`;
       const rollsSvg = sortedRolls.map(r => buildIsoRoll(r, settings, offsetX, offsetY, visibleLayer, totalLayers)).join('');
       const boxSvg = buildIsoBoxWireframe(viz, settings, offsetX, offsetY);
 
@@ -965,16 +974,16 @@
           ${boxSvg}
           ${rollsSvg}
           <text x="22" y="26" font-size="13" font-weight="700" fill="#1f2937">Vista isométrica · ${escapeHtml(viz.metrics.pattern)}</text>
-          <text x="22" y="604" font-size="12" fill="#3b4654">Capas: ${num(viz.metrics.totalLayers)} · Rollos: ${num(viz.metrics.totalRolls)}</text>
+          <text x="22" y="604" font-size="12" fill="#3b4654">${visibleLayerLabel} · Rollos: ${num(viz.metrics.totalRolls)}</text>
           <text x="350" y="604" font-size="12" fill="#ff8500" font-weight="700">Ocupación: ${(viz.metrics.occupancyRatio * 100).toFixed(2)}%</text>
         </svg>
       `;
     }
 
     function buildLayerSelector(viz, selectedLayer) {
-      const options = ['<option value="all">Todas las capas</option>'];
+      const options = [`<option value="all"${selectedLayer === 'all' ? ' selected' : ''}>Todas las capas</option>`];
       for (let layer = 1; layer <= viz.metrics.totalLayers; layer++) {
-        options.push(`<option value="${layer}">Capa ${layer}</option>`);
+        options.push(`<option value="${layer}"${selectedLayer === layer ? ' selected' : ''}>Capa ${layer}</option>`);
       }
 
       return `
@@ -1002,16 +1011,18 @@
       const controls = document.getElementById('layerControls');
       if (!container || !controls) return;
 
-      let selectedLayer = 'all';
+      const totalLayers = Math.max(1, valorNumericoSeguro(viz?.metrics?.totalLayers, 1));
+      let selectedLayer = totalLayers;
       container.innerHTML = buildIsoSvg(viz, selectedLayer);
       controls.innerHTML = buildLayerSelector(viz, selectedLayer);
       renderIsoMetrics(viz);
 
       const selector = document.getElementById('layerSelect');
       if (!selector) return;
-      selector.value = 'all';
+      selector.value = String(selectedLayer);
       selector.addEventListener('change', function() {
         const nextValue = selector.value === 'all' ? 'all' : Number(selector.value);
+        selectedLayer = nextValue;
         container.innerHTML = buildIsoSvg(viz, nextValue);
       });
     }
