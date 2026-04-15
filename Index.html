@@ -760,7 +760,16 @@
       };
     }
 
-    function getIsoSceneBounds(viz, settings, rollsForBounds = []) {
+    function getIsoColumnRadii(diameter, settings, compactMode = false) {
+      const safeDiameter = Math.max(0, valorNumericoSeguro(diameter, 0));
+      const compactFactor = compactMode ? 0.86 : 1;
+      return {
+        radiusX: Math.max(2.4, (safeDiameter * settings.scaleX) * 0.5 * compactFactor),
+        radiusY: Math.max(1.8, (safeDiameter * settings.scaleY) * 0.5 * compactFactor)
+      };
+    }
+
+    function getIsoSceneBounds(viz, settings, rollsForBounds = [], options = {}) {
       const hasValidBox = viz
         && viz.box
         && viz.box.length > 0
@@ -789,11 +798,10 @@
       corners3d.forEach(pushPoint);
 
       const filteredRolls = Array.isArray(rollsForBounds) ? rollsForBounds : [];
+      const compactColumns = options.compactColumns === true;
 
       filteredRolls.forEach(roll => {
-        const radiusWorld = Math.max(roll.diameter / 2, 0);
-        const radiusX = Math.max(2.8, radiusWorld * settings.scaleX * 0.52);
-        const radiusY = Math.max(2.0, radiusWorld * settings.scaleY * 0.52);
+        const { radiusX, radiusY } = getIsoColumnRadii(roll.diameter, settings, compactColumns);
 
         const base = isoProject({ x: roll.x, y: roll.y, z: roll.z }, settings);
         const top = isoProject({ x: roll.x, y: roll.y, z: roll.z + roll.length }, settings);
@@ -837,7 +845,8 @@
       return adjustColor('#ff8500', amount);
     }
 
-    function buildIsoBoxWireframe(viz, settings, offsetX, offsetY) {
+    function buildIsoBoxWireframe(viz, settings, offsetX, offsetY, options = {}) {
+      const compactColumns = options.compactColumns === true;
       const corners3d = [
         { x: 0, y: 0, z: 0 },
         { x: viz.box.length, y: 0, z: 0 },
@@ -864,11 +873,13 @@
         const p1 = points[edge[0]];
         const p2 = points[edge[1]];
         const isTopEdge = edge[0] >= 4 && edge[1] >= 4;
-        const opacity = isTopEdge ? 0.44 : 0.36;
+        const opacity = compactColumns ? (isTopEdge ? 0.30 : 0.17) : (isTopEdge ? 0.44 : 0.36);
         return `<line x1="${p1.x}" y1="${p1.y}" x2="${p2.x}" y2="${p2.y}" stroke="#64748b" stroke-opacity="${opacity}" stroke-width="0.70"/>`;
       }).join('');
 
-      const floor = `<polygon points="${points[0].x},${points[0].y} ${points[1].x},${points[1].y} ${points[2].x},${points[2].y} ${points[3].x},${points[3].y}" fill="#cbd5e1" fill-opacity="0.24" stroke="#64748b" stroke-opacity="0.36" stroke-width="0.66"/>`;
+      const floorOpacity = compactColumns ? 0.15 : 0.24;
+      const floorStrokeOpacity = compactColumns ? 0.22 : 0.36;
+      const floor = `<polygon points="${points[0].x},${points[0].y} ${points[1].x},${points[1].y} ${points[2].x},${points[2].y} ${points[3].x},${points[3].y}" fill="#cbd5e1" fill-opacity="${floorOpacity}" stroke="#64748b" stroke-opacity="${floorStrokeOpacity}" stroke-width="0.66"/>`;
 
       return floor + lines;
     }
@@ -978,9 +989,7 @@
       safeRolls.forEach((roll) => {
         const key = [
           valorNumericoSeguro(roll?.x, 0),
-          valorNumericoSeguro(roll?.y, 0),
-          valorNumericoSeguro(roll?.diameter, 0),
-          String(roll?.orientation || '')
+          valorNumericoSeguro(roll?.y, 0)
         ].join('|');
 
         if (!grouped.has(key)) {
@@ -999,6 +1008,7 @@
 
         const column = grouped.get(key);
         column.unitHeight = Math.max(column.unitHeight, Math.max(1, valorNumericoSeguro(roll?.length, 1)));
+        column.diameter = Math.max(column.diameter, Math.max(0, valorNumericoSeguro(roll?.diameter, 0)));
         column.layers.add(Math.max(1, valorNumericoSeguro(roll?.layer, 1)));
         column.rollsCount += 1;
       });
@@ -1036,8 +1046,7 @@
       const cxTop = offsetX + top.x;
       const cyTop = offsetY + top.y;
 
-      const radiusX = Math.max(2.8, (column.diameter * settings.scaleX) * 0.5);
-      const radiusY = Math.max(2.0, (column.diameter * settings.scaleY) * 0.5);
+      const { radiusX, radiusY } = getIsoColumnRadii(column.diameter, settings, true);
       const innerRatio = getTubeInnerRatio({ diameter: column.diameter });
       const innerRx = Math.max(1.4, radiusX * innerRatio);
       const innerRy = Math.max(1.0, radiusY * innerRatio);
@@ -1061,6 +1070,7 @@
 
       return `
         <g>
+          <ellipse cx="${cxBase}" cy="${cyBase}" rx="${radiusX}" ry="${radiusY}" fill="${adjustColor(bodyColor, -12)}" fill-opacity="0.22" stroke="${strokeColor}" stroke-opacity="0.28" stroke-width="0.40"/>
           ${buildIsoTubeOuterWall(topPoint, basePoint, radiusX, radiusY, colors)}
           ${buildTubeInnerHint(topPoint, basePoint, innerRx, innerRy, colors)}
           ${buildTubeTopRing(cxTop, cyTop, radiusX, radiusY, innerRx, innerRy, colors)}
@@ -1096,13 +1106,16 @@
         }));
     }
 
-    function getAllLayersViewDescription(totalLayers, totalRolls, totalColumns) {
-      return `Vista activa: Todas las capas · Representación: columnas completas por posición · Altura simulada por columna: niveles × ancho efectivo · Niveles simulados: ${num(totalLayers)} · Columnas visibles: ${num(totalColumns)} · Total del acomodo: ${num(totalRolls)} rollos`;
+    function getAllLayersViewDescription(totalLayers, totalRolls, totalColumns, footprintPositions) {
+      const footprintLabel = Number.isFinite(footprintPositions)
+        ? ` · Huella XY esperada: ${num(footprintPositions)} posiciones`
+        : '';
+      return `Vista activa: Todas las capas · Representación: columnas completas por posición · Altura simulada por columna: niveles × ancho efectivo · Niveles simulados: ${num(totalLayers)} · Columnas visibles: ${num(totalColumns)}${footprintLabel} · Total del acomodo: ${num(totalRolls)} rollos`;
     }
 
-    function getViewModeLabel(visibleLayer, focusLayer, totalLayers, visibleRollsCount, totalRolls, totalColumns = 0) {
+    function getViewModeLabel(visibleLayer, focusLayer, totalLayers, visibleRollsCount, totalRolls, totalColumns = 0, footprintPositions = null) {
       if (visibleLayer === 'all') {
-        return getAllLayersViewDescription(totalLayers, totalRolls, totalColumns);
+        return getAllLayersViewDescription(totalLayers, totalRolls, totalColumns, footprintPositions);
       }
       return `Vista activa: Capa ${num(visibleLayer)} de ${num(totalLayers)} · Representación: capa completa · Rollos mostrados: ${num(visibleRollsCount)}`;
     }
@@ -1136,6 +1149,7 @@
       const totalLayers = Math.max(1, viz.metrics.totalLayers || 1);
       const focusLayer = visibleLayer === 'all' ? totalLayers : visibleLayer;
       const allLayerColumns = visibleLayer === 'all' ? groupRollsIntoColumns(viz.rolls) : [];
+      const allLayersCompactMode = visibleLayer === 'all';
       const rollsForView = visibleLayer === 'all' ? [] : getLayerViewRolls(viz, visibleLayer, focusLayer);
       const rollsForBounds = visibleLayer === 'all'
         ? allLayerColumns.map(column => ({
@@ -1146,11 +1160,11 @@
           diameter: column.diameter
         }))
         : rollsForView.map(item => item.roll);
-      const baseBounds = getIsoSceneBounds(viz, baseSettings, rollsForBounds);
+      const baseBounds = getIsoSceneBounds(viz, baseSettings, rollsForBounds, { compactColumns: allLayersCompactMode });
 
       const sceneWidth = Math.max(1, baseBounds.maxX - baseBounds.minX);
       const sceneHeight = Math.max(1, baseBounds.maxY - baseBounds.minY);
-      const fitScale = Math.min(1.28, Math.max(0.72, Math.min(availableWidth / sceneWidth, availableHeight / sceneHeight)));
+      const fitScale = Math.min(1.20, Math.max(0.70, Math.min(availableWidth / sceneWidth, availableHeight / sceneHeight)));
       const verticalBoost = visibleLayer === 'all' ? 1.14 : 1.06;
 
       const settings = {
@@ -1159,7 +1173,7 @@
         scaleZ: baseSettings.scaleZ * fitScale * verticalBoost
       };
 
-      const finalBounds = getIsoSceneBounds(viz, settings, rollsForBounds);
+      const finalBounds = getIsoSceneBounds(viz, settings, rollsForBounds, { compactColumns: allLayersCompactMode });
       const sceneCenterX = (finalBounds.minX + finalBounds.maxX) / 2;
       const sceneCenterY = (finalBounds.minY + finalBounds.maxY) / 2;
       const targetCenterX = TECH_VIEW.width / 2;
@@ -1168,6 +1182,9 @@
       const offsetY = targetCenterY - sceneCenterY;
 
       const visibleRollsCount = rollsForView.filter(item => item.renderMode === 'active').length;
+      const footprintPositions = visibleLayer === 'all'
+        ? new Set((Array.isArray(viz.rolls) ? viz.rolls : []).map(r => `${valorNumericoSeguro(r?.x, 0)}|${valorNumericoSeguro(r?.y, 0)}`)).size
+        : null;
       const maxDepthCandidates = visibleLayer === 'all'
         ? allLayerColumns.map(column => column.baseX + column.baseY)
         : rollsForView.map(item => item.roll.x + item.roll.y);
@@ -1178,18 +1195,29 @@
         totalLayers,
         visibleRollsCount,
         viz.metrics.totalRolls,
-        allLayerColumns.length
+        allLayerColumns.length,
+        footprintPositions
       );
       const totalLayoutLabel = `Total del acomodo: ${num(viz.metrics.totalRolls)} rollos`;
+      const sortedColumns = visibleLayer === 'all'
+        ? [...allLayerColumns].sort((a, b) => {
+          const pa = isoProject({ x: a.baseX, y: a.baseY, z: a.zBase }, settings);
+          const pb = isoProject({ x: b.baseX, y: b.baseY, z: b.zBase }, settings);
+          if (pa.y !== pb.y) return pa.y - pb.y;
+          if (a.baseY !== b.baseY) return a.baseY - b.baseY;
+          if (a.baseX !== b.baseX) return a.baseX - b.baseX;
+          return pa.x - pb.x;
+        })
+        : [];
       const rollsSvg = visibleLayer === 'all'
-        ? allLayerColumns.map(column => buildIsoStackedTubeColumn(column, settings, offsetX, offsetY, maxDepth)).join('')
+        ? sortedColumns.map(column => buildIsoStackedTubeColumn(column, settings, offsetX, offsetY, maxDepth)).join('')
         : rollsForView.map(item => {
           if (item.renderMode === 'active') {
             return buildIsoTubeActive(item.roll, settings, offsetX, offsetY, totalLayers, maxDepth);
           }
           return buildIsoTubeGhost(item.roll, settings, offsetX, offsetY, totalLayers);
         }).join('');
-      const boxSvg = buildIsoBoxWireframe(viz, settings, offsetX, offsetY);
+      const boxSvg = buildIsoBoxWireframe(viz, settings, offsetX, offsetY, { compactColumns: allLayersCompactMode });
 
       return `
         <svg width="${TECH_VIEW.width}" height="${TECH_VIEW.height}" viewBox="0 0 ${TECH_VIEW.width} ${TECH_VIEW.height}" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
