@@ -326,7 +326,7 @@
       <section class="panel tech-panel">
         <div class="tech-head">
           <h3 class="panel-title">Acomodo técnico</h3>
-          <div class="tech-sub">Vista superior y lateral proporcional</div>
+          <div class="tech-sub">Vista superior e isométrica</div>
         </div>
 
         <div class="views-grid">
@@ -335,9 +335,10 @@
             <div id="layoutTop" class="svg-wrap"></div>
           </div>
           <div class="tech-view">
-            <div class="view-title">VISTA LATERAL</div>
+            <div class="view-title">VISTA ISOMÉTRICA</div>
             <div id="layoutSide" class="svg-wrap"></div>
-            <div id="layoutSideMeta" class="tech-meta"></div>
+            <div id="layerControls" class="tech-meta"></div>
+            <div id="isoMetrics" class="tech-meta"></div>
           </div>
         </div>
 
@@ -488,7 +489,8 @@
       `;
 
       document.getElementById('layoutTop').innerHTML = generarSVGTop(mejor);
-      renderSideView(mejor);
+      const packingVisualization = construirPackingVisualization(data.visualizacion);
+      renderIsometricView(packingVisualization);
       renderSugerencia(data.sugerencia, mejor);
       renderCajaIdeal(data.caja_ideal, data.comparacion_caja_ideal);
       document.getElementById('tabla').innerHTML = generarTabla(data.resultados);
@@ -707,179 +709,197 @@
       }
     }
 
-    function buildSideViewSvg(m) {
-      const svgNS = 'http://www.w3.org/2000/svg';
-      const svg = document.createElementNS(svgNS, 'svg');
-      svg.setAttribute('width', '100%');
-      svg.setAttribute('height', '100%');
-      svg.setAttribute('viewBox', `0 0 ${TECH_VIEW.width} ${TECH_VIEW.height}`);
-      svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
 
-      const baseReal = Math.max(1, valorNumericoSeguro(m?.largo_caja_mm, 1));
-      const altoReal = Math.max(1, valorNumericoSeguro(m?.alto_caja_mm, valorNumericoSeguro(m?.alto_total_mm, 1)));
-      const rolloAnchoReal = Math.max(0, valorNumericoSeguro(m?.diametro_efectivo_mm, 0));
-      const rolloAltoReal = Math.max(0, valorNumericoSeguro(m?.ancho_efectivo_mm, 0));
-      const columnas = Math.max(0, valorNumericoSeguro(m?.piezas_largo, 0));
-      const niveles = Math.max(0, valorNumericoSeguro(m?.niveles, 0));
+    /**
+     * @typedef {Object} PackingVisualization
+     * @property {{length:number,width:number,height:number}} box
+     * @property {Array<{id:string,x:number,y:number,z:number,diameter:number,length:number,layer:number,orientation:("x"|"y"|"z")}>} rolls
+     * @property {{totalRolls:number,usedVolume:number,freeVolume:number,occupancyRatio:number,totalLayers:number,pattern:string}} metrics
+     */
 
-      const ctx = buildTechnicalCanvas(baseReal, altoReal);
-
-      const visualHeightBoost = 1.05;
-      const levelGapReal = Math.max(0, rolloAltoReal * 0.06);
-  
-      const layoutRealW = columnas * rolloAnchoReal;
-      const layoutRealH = (niveles * (rolloAltoReal * visualHeightBoost)) + (Math.max(0, niveles - 1) * levelGapReal);
-
-      const fitScaleX = ctx.boxW / Math.max(layoutRealW, 1);
-      const fitScaleY = ctx.boxH / Math.max(layoutRealH, 1);
-      const scale = Math.min(fitScaleX, fitScaleY);
-
-      const rollW = rolloAnchoReal * scale;
-      const rollH = (rolloAltoReal * visualHeightBoost) * scale;
-      const levelGap = levelGapReal * scale;
-
-      const gridW = columnas * rollW;
-      const gridH = (niveles * rollH) + (Math.max(0, niveles - 1) * levelGap);
-
-      const offsetX = ctx.ox + ((ctx.boxW - gridW) / 2);
-      const offsetY = ctx.oy + ((ctx.boxH - gridH) / 2);
-
-      const bg = document.createElementNS(svgNS, 'rect');
-      bg.setAttribute('x', '0');
-      bg.setAttribute('y', '0');
-      bg.setAttribute('width', String(TECH_VIEW.width));
-      bg.setAttribute('height', String(TECH_VIEW.height));
-      bg.setAttribute('fill', '#ffffff');
-      svg.appendChild(bg);
-
-      const box = document.createElementNS(svgNS, 'rect');
-      box.setAttribute('x', String(ctx.ox));
-      box.setAttribute('y', String(ctx.oy));
-      box.setAttribute('width', String(ctx.boxW));
-      box.setAttribute('height', String(ctx.boxH));
-      box.setAttribute('fill', '#f8fbff');
-      box.setAttribute('stroke', '#1e2937');
-      box.setAttribute('stroke-width', '2');
-      svg.appendChild(box);
-
-      const floor = document.createElementNS(svgNS, 'line');
-      floor.setAttribute('x1', String(ctx.ox));
-      floor.setAttribute('y1', String(ctx.oy + ctx.boxH));
-      floor.setAttribute('x2', String(ctx.ox + ctx.boxW));
-      floor.setAttribute('y2', String(ctx.oy + ctx.boxH));
-      floor.setAttribute('stroke', '#8ea0b5');
-      floor.setAttribute('stroke-width', '1');
-      floor.setAttribute('stroke-dasharray', '4 4');
-      svg.appendChild(floor);
-
-      if (!niveles || !columnas || !rolloAnchoReal || !rolloAltoReal) {
-        const msg = document.createElementNS(svgNS, 'text');
-        msg.setAttribute('x', String(ctx.ox + (ctx.boxW / 2)));
-        msg.setAttribute('y', String(ctx.oy + (ctx.boxH / 2)));
-        msg.setAttribute('text-anchor', 'middle');
-        msg.setAttribute('font-size', '13');
-        msg.setAttribute('fill', '#667085');
-        msg.textContent = 'Sin datos suficientes para vista lateral';
-        svg.appendChild(msg);
-      } else {
-        const strokeW = Math.max(0.75, Math.min(1, Math.min(rollW, rollH) * 0.03));
-        const topRy = Math.max(1.2, Math.min(rollH * 0.10, 2.6));
-        const baseGuideOffset = Math.max(1.2, Math.min(2.2, topRy * 0.9));
-        const levelLabelX = ctx.ox - 6;
-
-        for (let nivel = 0; nivel < niveles; nivel++) {
-          const y = offsetY + (niveles - 1 - nivel) * (rollH + levelGap);
-
-          const tag = document.createElementNS(svgNS, 'text');
-          tag.setAttribute('x', String(levelLabelX));
-          tag.setAttribute('y', String(y + (rollH / 2) + 2));
-          tag.setAttribute('text-anchor', 'end');
-          tag.setAttribute('font-size', '9');
-          tag.setAttribute('fill', '#7a8797');
-          tag.textContent = `N${nivel + 1}`;
-          svg.appendChild(tag);
-
-          for (let col = 0; col < columnas; col++) {
-            const x = offsetX + col * rollW;
-            const bodyY = y + topRy;
-            const bodyH = Math.max(rollH - topRy, 1);
-
-            const body = document.createElementNS(svgNS, 'rect');
-            body.setAttribute('x', String(x));
-            body.setAttribute('y', String(bodyY));
-            body.setAttribute('width', String(rollW));
-            body.setAttribute('height', String(bodyH));
-            body.setAttribute('fill', '#ffffff');
-            body.setAttribute('stroke', '#4f5f70');
-            body.setAttribute('stroke-width', String(strokeW));
-            svg.appendChild(body);
-
-            const top = document.createElementNS(svgNS, 'ellipse');
-            top.setAttribute('cx', String(x + rollW / 2));
-            top.setAttribute('cy', String(y + topRy));
-            top.setAttribute('rx', String(rollW / 2));
-            top.setAttribute('ry', String(topRy));
-            top.setAttribute('fill', '#f3f7fc');
-            top.setAttribute('stroke', '#4f5f70');
-            top.setAttribute('stroke-width', String(strokeW));
-            svg.appendChild(top);
-
-            const baseGuide = document.createElementNS(svgNS, 'line');
-            baseGuide.setAttribute('x1', String(x + strokeW));
-            baseGuide.setAttribute('y1', String(y + rollH - baseGuideOffset));
-            baseGuide.setAttribute('x2', String(x + rollW - strokeW));
-            baseGuide.setAttribute('y2', String(y + rollH - baseGuideOffset));
-            baseGuide.setAttribute('stroke', '#c3ccd8');
-            baseGuide.setAttribute('stroke-width', String(Math.max(0.5, strokeW * 0.6)));
-            svg.appendChild(baseGuide);
-          }
-        }
+    function construirPackingVisualization(raw) {
+      if (!raw || !raw.box) {
+        return {
+          box: { length: 0, width: 0, height: 0 },
+          rolls: [],
+          metrics: { totalRolls: 0, usedVolume: 0, freeVolume: 0, occupancyRatio: 0, totalLayers: 0, pattern: 'sin_datos' }
+        };
       }
 
-      const guidesGroup = document.createElementNS(svgNS, 'g');
-      guidesGroup.innerHTML = generateBoxGuides({
-        ox: ctx.ox,
-        oy: ctx.oy,
-        boxW: ctx.boxW,
-        boxH: ctx.boxH,
-        hLabel: `${num(m?.largo_caja_mm)} mm base`,
-        vLabel: `${num(altoReal)} mm altura útil`
-      });
-      svg.appendChild(guidesGroup);
-
-      const title = document.createElementNS(svgNS, 'text');
-      title.setAttribute('x', '22');
-      title.setAttribute('y', '26');
-      title.setAttribute('font-size', '13');
-      title.setAttribute('font-weight', '700');
-      title.setAttribute('fill', '#1f2937');
-      title.textContent = `${m?.tipo_caja || 'Caja'} · vista lateral`;
-      svg.appendChild(title);
-
-      return svg;
+      return {
+        box: {
+          length: Math.max(0, valorNumericoSeguro(raw.box.length, 0)),
+          width: Math.max(0, valorNumericoSeguro(raw.box.width, 0)),
+          height: Math.max(0, valorNumericoSeguro(raw.box.height, 0))
+        },
+        rolls: (Array.isArray(raw.rolls) ? raw.rolls : []).map(r => ({
+          id: String(r.id || ''),
+          x: valorNumericoSeguro(r.x, 0),
+          y: valorNumericoSeguro(r.y, 0),
+          z: valorNumericoSeguro(r.z, 0),
+          diameter: Math.max(0, valorNumericoSeguro(r.diameter, 0)),
+          length: Math.max(0, valorNumericoSeguro(r.length, 0)),
+          layer: Math.max(1, valorNumericoSeguro(r.layer, 1)),
+          orientation: r.orientation || 'z'
+        })),
+        metrics: {
+          totalRolls: Math.max(0, valorNumericoSeguro(raw.metrics?.totalRolls, 0)),
+          usedVolume: Math.max(0, valorNumericoSeguro(raw.metrics?.usedVolume, 0)),
+          freeVolume: Math.max(0, valorNumericoSeguro(raw.metrics?.freeVolume, 0)),
+          occupancyRatio: Math.max(0, valorNumericoSeguro(raw.metrics?.occupancyRatio, 0)),
+          totalLayers: Math.max(0, valorNumericoSeguro(raw.metrics?.totalLayers, 0)),
+          pattern: String(raw.metrics?.pattern || 'sin_datos')
+        }
+      };
     }
 
-    function buildSideViewMeta(m) {
+    function isoProject(point, settings) {
+      return {
+        x: (point.x - point.y) * settings.scaleX,
+        y: (point.x + point.y) * settings.scaleY - point.z * settings.scaleZ
+      };
+    }
+
+    function getLayerColor(layer) {
+      const palette = ['#2563eb', '#0ea5e9', '#0891b2', '#14b8a6', '#22c55e', '#84cc16', '#f59e0b', '#f97316', '#ef4444', '#a855f7'];
+      return palette[(Math.max(1, layer) - 1) % palette.length];
+    }
+
+    function buildIsoBoxWireframe(viz, settings, centerX, centerY) {
+      const corners3d = [
+        { x: 0, y: 0, z: 0 },
+        { x: viz.box.length, y: 0, z: 0 },
+        { x: viz.box.length, y: viz.box.width, z: 0 },
+        { x: 0, y: viz.box.width, z: 0 },
+        { x: 0, y: 0, z: viz.box.height },
+        { x: viz.box.length, y: 0, z: viz.box.height },
+        { x: viz.box.length, y: viz.box.width, z: viz.box.height },
+        { x: 0, y: viz.box.width, z: viz.box.height }
+      ];
+
+      const points = corners3d.map(p => {
+        const projected = isoProject(p, settings);
+        return { x: centerX + projected.x, y: centerY + projected.y };
+      });
+
+      const edges = [
+        [0, 1], [1, 2], [2, 3], [3, 0],
+        [4, 5], [5, 6], [6, 7], [7, 4],
+        [0, 4], [1, 5], [2, 6], [3, 7]
+      ];
+
+      const lines = edges.map(edge => {
+        const p1 = points[edge[0]];
+        const p2 = points[edge[1]];
+        return `<line x1="${p1.x}" y1="${p1.y}" x2="${p2.x}" y2="${p2.y}" stroke="#475569" stroke-opacity="0.65" stroke-width="1.2"/>`;
+      }).join('');
+
+      const floor = `<polygon points="${points[0].x},${points[0].y} ${points[1].x},${points[1].y} ${points[2].x},${points[2].y} ${points[3].x},${points[3].y}" fill="#e2e8f0" fill-opacity="0.26" stroke="none"/>`;
+
+      return floor + lines;
+    }
+
+    function buildIsoRoll(roll, settings, centerX, centerY, visibleLayer) {
+      if (visibleLayer !== 'all' && roll.layer !== visibleLayer) return '';
+
+      const base = isoProject({ x: roll.x, y: roll.y, z: roll.z }, settings);
+      const top = isoProject({ x: roll.x, y: roll.y, z: roll.z + roll.length }, settings);
+      const cxBase = centerX + base.x;
+      const cyBase = centerY + base.y;
+      const cxTop = centerX + top.x;
+      const cyTop = centerY + top.y;
+
+      const radiusX = Math.max(2.2, (roll.diameter * settings.scaleX) * 0.48);
+      const radiusY = Math.max(1.6, (roll.diameter * settings.scaleY) * 0.48);
+      const color = getLayerColor(roll.layer);
+
       return `
-        Piezas/capa: ${num((valorNumericoSeguro(m.piezas_largo, 0) || 0) * (valorNumericoSeguro(m.piezas_ancho, 0) || 0))} ·
-        Variante: ${escapeHtml(m.variante_seleccionada || 'grid_recto')} ·
-        Columnas: ${num(valorNumericoSeguro(m.piezas_largo, 0))} ·
-        Fondo: ${num(valorNumericoSeguro(m.piezas_ancho, 0))} ·
-        Niveles: ${num(valorNumericoSeguro(m.niveles, 0))}
+        <g>
+          <line x1="${cxBase - radiusX}" y1="${cyBase}" x2="${cxTop - radiusX}" y2="${cyTop}" stroke="${color}" stroke-opacity="0.7" stroke-width="1.1"/>
+          <line x1="${cxBase + radiusX}" y1="${cyBase}" x2="${cxTop + radiusX}" y2="${cyTop}" stroke="${color}" stroke-opacity="0.7" stroke-width="1.1"/>
+          <ellipse cx="${cxTop}" cy="${cyTop}" rx="${radiusX}" ry="${radiusY}" fill="${color}" fill-opacity="0.36" stroke="${color}" stroke-width="1.1"/>
+          <ellipse cx="${cxBase}" cy="${cyBase}" rx="${radiusX}" ry="${radiusY}" fill="#ffffff" fill-opacity="0.10" stroke="${color}" stroke-opacity="0.42" stroke-width="0.9"/>
+          <title>${escapeHtml(roll.id)} · Capa ${roll.layer}</title>
+        </g>
       `;
     }
 
+    function buildIsoSvg(viz, visibleLayer = 'all') {
+      const maxDim = Math.max(viz.box.length, viz.box.width, viz.box.height, 1);
+      const settings = {
+        scaleX: 360 / maxDim,
+        scaleY: 190 / maxDim,
+        scaleZ: 300 / maxDim
+      };
 
-    function renderSideView(m) {
-      const figureContainer = document.getElementById('layoutSide');
-      const metaContainer = document.getElementById('layoutSideMeta');
-      if (!figureContainer) return;
+      const centerX = TECH_VIEW.width * 0.50;
+      const centerY = TECH_VIEW.height * 0.78;
 
-      figureContainer.replaceChildren();
-      figureContainer.appendChild(buildSideViewSvg(m || {}));
-      if (metaContainer) {
-        metaContainer.innerHTML = buildSideViewMeta(m || {});
+      const sortedRolls = [...viz.rolls].sort((a, b) => {
+        const depthA = (a.x + a.y);
+        const depthB = (b.x + b.y);
+        if (depthA !== depthB) return depthA - depthB;
+        return a.z - b.z;
+      });
+
+      const rollsSvg = sortedRolls.map(r => buildIsoRoll(r, settings, centerX, centerY, visibleLayer)).join('');
+      const boxSvg = buildIsoBoxWireframe(viz, settings, centerX, centerY);
+
+      return `
+        <svg width="${TECH_VIEW.width}" height="${TECH_VIEW.height}" viewBox="0 0 ${TECH_VIEW.width} ${TECH_VIEW.height}" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
+          <rect x="0" y="0" width="${TECH_VIEW.width}" height="${TECH_VIEW.height}" fill="#ffffff"/>
+          ${boxSvg}
+          ${rollsSvg}
+          <text x="22" y="26" font-size="13" font-weight="700" fill="#1f2937">Vista isométrica · ${escapeHtml(viz.metrics.pattern)}</text>
+          <text x="22" y="604" font-size="12" fill="#3b4654">Capas: ${num(viz.metrics.totalLayers)} · Rollos: ${num(viz.metrics.totalRolls)}</text>
+          <text x="350" y="604" font-size="12" fill="#ff8500" font-weight="700">Ocupación: ${(viz.metrics.occupancyRatio * 100).toFixed(2)}%</text>
+        </svg>
+      `;
+    }
+
+    function buildLayerSelector(viz, selectedLayer) {
+      const options = ['<option value="all">Todas las capas</option>'];
+      for (let layer = 1; layer <= viz.metrics.totalLayers; layer++) {
+        options.push(`<option value="${layer}">Capa ${layer}</option>`);
       }
+
+      return `
+        <label for="layerSelect"><b>Capa visible:</b></label>
+        <select id="layerSelect" style="margin-left:6px;min-height:28px;border:1px solid #d0d7e2;border-radius:6px;padding:2px 6px;background:#fff;">
+          ${options.join('')}
+        </select>
+      `;
+    }
+
+    function renderIsoMetrics(viz) {
+      const node = document.getElementById('isoMetrics');
+      if (!node) return;
+      node.innerHTML = `
+        <b>Métricas isométricas:</b>
+        Total rollos ${num(viz.metrics.totalRolls)} ·
+        Capas ${num(viz.metrics.totalLayers)} ·
+        Ocupación ${(viz.metrics.occupancyRatio * 100).toFixed(2)}% ·
+        Volumen usado ${num(viz.metrics.usedVolume)} mm³
+      `;
+    }
+
+    function renderIsometricView(viz) {
+      const container = document.getElementById('layoutSide');
+      const controls = document.getElementById('layerControls');
+      if (!container || !controls) return;
+
+      let selectedLayer = 'all';
+      container.innerHTML = buildIsoSvg(viz, selectedLayer);
+      controls.innerHTML = buildLayerSelector(viz, selectedLayer);
+      renderIsoMetrics(viz);
+
+      const selector = document.getElementById('layerSelect');
+      if (!selector) return;
+      selector.value = 'all';
+      selector.addEventListener('change', function() {
+        const nextValue = selector.value === 'all' ? 'all' : Number(selector.value);
+        container.innerHTML = buildIsoSvg(viz, nextValue);
+      });
     }
 
     function generarTabla(rows) {

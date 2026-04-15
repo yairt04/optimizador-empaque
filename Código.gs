@@ -162,10 +162,13 @@ function simularSkuWeb(codigo) {
   timeEnd_('simularSkuWeb.skus_web');
   timeEnd_('simularSkuWeb.total');
 
+  const visualizacion = crearPackingVisualization_(data.mejor);
+
   return {
     rollo: data.rollo,
     mejor: data.mejor,
     resultados: data.resultados,
+    visualizacion: visualizacion,
     caja_ideal: cajaIdeal,
     comparacion_caja_ideal: comparacionCajaIdeal,
     sugerencia: sugerencia,
