@@ -760,12 +760,68 @@
       };
     }
 
+    function getIsoSceneBounds(viz, settings, visibleLayer = 'all') {
+      const hasValidBox = viz
+        && viz.box
+        && viz.box.length > 0
+        && viz.box.width > 0
+        && viz.box.height > 0;
+      if (!hasValidBox) {
+        return { minX: 0, maxX: 0, minY: 0, maxY: 0, isEmpty: true };
+      }
+
+      const points = [];
+      const pushPoint = (point) => {
+        const projected = isoProject(point, settings);
+        points.push(projected);
+      };
+
+      const corners3d = [
+        { x: 0, y: 0, z: 0 },
+        { x: viz.box.length, y: 0, z: 0 },
+        { x: viz.box.length, y: viz.box.width, z: 0 },
+        { x: 0, y: viz.box.width, z: 0 },
+        { x: 0, y: 0, z: viz.box.height },
+        { x: viz.box.length, y: 0, z: viz.box.height },
+        { x: viz.box.length, y: viz.box.width, z: viz.box.height },
+        { x: 0, y: viz.box.width, z: viz.box.height }
+      ];
+      corners3d.forEach(pushPoint);
+
+      const filteredRolls = (Array.isArray(viz.rolls) ? viz.rolls : []).filter(roll => (
+        visibleLayer === 'all' || roll.layer === visibleLayer
+      ));
+
+      filteredRolls.forEach(roll => {
+        const radiusWorld = Math.max(roll.diameter / 2, 0);
+        const radiusX = Math.max(2.8, radiusWorld * settings.scaleX * 0.52);
+        const radiusY = Math.max(2.0, radiusWorld * settings.scaleY * 0.52);
+
+        const base = isoProject({ x: roll.x, y: roll.y, z: roll.z }, settings);
+        const top = isoProject({ x: roll.x, y: roll.y, z: roll.z + roll.length }, settings);
+        points.push({ x: base.x - radiusX, y: base.y - radiusY });
+        points.push({ x: base.x + radiusX, y: base.y + radiusY });
+        points.push({ x: top.x - radiusX, y: top.y - radiusY });
+        points.push({ x: top.x + radiusX, y: top.y + radiusY });
+      });
+
+      if (!points.length) {
+        return { minX: 0, maxX: 0, minY: 0, maxY: 0, isEmpty: true };
+      }
+
+      const minX = Math.min(...points.map(p => p.x));
+      const maxX = Math.max(...points.map(p => p.x));
+      const minY = Math.min(...points.map(p => p.y));
+      const maxY = Math.max(...points.map(p => p.y));
+      return { minX, maxX, minY, maxY, isEmpty: false };
+    }
+
     function getLayerColor(layer) {
       const palette = ['#2563eb', '#0ea5e9', '#0891b2', '#14b8a6', '#22c55e', '#84cc16', '#f59e0b', '#f97316', '#ef4444', '#a855f7'];
       return palette[(Math.max(1, layer) - 1) % palette.length];
     }
 
-    function buildIsoBoxWireframe(viz, settings, centerX, centerY) {
+    function buildIsoBoxWireframe(viz, settings, offsetX, offsetY) {
       const corners3d = [
         { x: 0, y: 0, z: 0 },
         { x: viz.box.length, y: 0, z: 0 },
@@ -779,7 +835,7 @@
 
       const points = corners3d.map(p => {
         const projected = isoProject(p, settings);
-        return { x: centerX + projected.x, y: centerY + projected.y };
+        return { x: offsetX + projected.x, y: offsetY + projected.y };
       });
 
       const edges = [
@@ -791,59 +847,96 @@
       const lines = edges.map(edge => {
         const p1 = points[edge[0]];
         const p2 = points[edge[1]];
-        return `<line x1="${p1.x}" y1="${p1.y}" x2="${p2.x}" y2="${p2.y}" stroke="#475569" stroke-opacity="0.65" stroke-width="1.2"/>`;
+        return `<line x1="${p1.x}" y1="${p1.y}" x2="${p2.x}" y2="${p2.y}" stroke="#64748b" stroke-opacity="0.56" stroke-width="1.1"/>`;
       }).join('');
 
-      const floor = `<polygon points="${points[0].x},${points[0].y} ${points[1].x},${points[1].y} ${points[2].x},${points[2].y} ${points[3].x},${points[3].y}" fill="#e2e8f0" fill-opacity="0.26" stroke="none"/>`;
+      const floor = `<polygon points="${points[0].x},${points[0].y} ${points[1].x},${points[1].y} ${points[2].x},${points[2].y} ${points[3].x},${points[3].y}" fill="#e2e8f0" fill-opacity="0.34" stroke="#94a3b8" stroke-opacity="0.25" stroke-width="0.8"/>`;
 
       return floor + lines;
     }
 
-    function buildIsoRoll(roll, settings, centerX, centerY, visibleLayer) {
+    function buildIsoRoll(roll, settings, offsetX, offsetY, visibleLayer) {
       if (visibleLayer !== 'all' && roll.layer !== visibleLayer) return '';
 
       const base = isoProject({ x: roll.x, y: roll.y, z: roll.z }, settings);
       const top = isoProject({ x: roll.x, y: roll.y, z: roll.z + roll.length }, settings);
-      const cxBase = centerX + base.x;
-      const cyBase = centerY + base.y;
-      const cxTop = centerX + top.x;
-      const cyTop = centerY + top.y;
+      const cxBase = offsetX + base.x;
+      const cyBase = offsetY + base.y;
+      const cxTop = offsetX + top.x;
+      const cyTop = offsetY + top.y;
 
-      const radiusX = Math.max(2.2, (roll.diameter * settings.scaleX) * 0.48);
-      const radiusY = Math.max(1.6, (roll.diameter * settings.scaleY) * 0.48);
+      const radiusX = Math.max(2.8, (roll.diameter * settings.scaleX) * 0.5);
+      const radiusY = Math.max(2.0, (roll.diameter * settings.scaleY) * 0.5);
       const color = getLayerColor(roll.layer);
 
       return `
         <g>
-          <line x1="${cxBase - radiusX}" y1="${cyBase}" x2="${cxTop - radiusX}" y2="${cyTop}" stroke="${color}" stroke-opacity="0.7" stroke-width="1.1"/>
-          <line x1="${cxBase + radiusX}" y1="${cyBase}" x2="${cxTop + radiusX}" y2="${cyTop}" stroke="${color}" stroke-opacity="0.7" stroke-width="1.1"/>
-          <ellipse cx="${cxTop}" cy="${cyTop}" rx="${radiusX}" ry="${radiusY}" fill="${color}" fill-opacity="0.36" stroke="${color}" stroke-width="1.1"/>
-          <ellipse cx="${cxBase}" cy="${cyBase}" rx="${radiusX}" ry="${radiusY}" fill="#ffffff" fill-opacity="0.10" stroke="${color}" stroke-opacity="0.42" stroke-width="0.9"/>
+          <line x1="${cxBase - radiusX}" y1="${cyBase}" x2="${cxTop - radiusX}" y2="${cyTop}" stroke="${color}" stroke-opacity="0.74" stroke-width="1.15"/>
+          <line x1="${cxBase + radiusX}" y1="${cyBase}" x2="${cxTop + radiusX}" y2="${cyTop}" stroke="${color}" stroke-opacity="0.74" stroke-width="1.15"/>
+          <ellipse cx="${cxTop}" cy="${cyTop}" rx="${radiusX}" ry="${radiusY}" fill="${color}" fill-opacity="0.48" stroke="${color}" stroke-width="1.25"/>
+          <ellipse cx="${cxBase}" cy="${cyBase}" rx="${radiusX}" ry="${radiusY}" fill="#ffffff" fill-opacity="0.08" stroke="${color}" stroke-opacity="0.34" stroke-width="0.9"/>
           <title>${escapeHtml(roll.id)} · Capa ${roll.layer}</title>
         </g>
       `;
     }
 
     function buildIsoSvg(viz, visibleLayer = 'all') {
+      const hasBoxData = viz
+        && viz.box
+        && viz.box.length > 0
+        && viz.box.width > 0
+        && viz.box.height > 0;
+      if (!hasBoxData) {
+        return `
+          <svg width="${TECH_VIEW.width}" height="${TECH_VIEW.height}" viewBox="0 0 ${TECH_VIEW.width} ${TECH_VIEW.height}" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
+            <rect x="0" y="0" width="${TECH_VIEW.width}" height="${TECH_VIEW.height}" fill="#ffffff"/>
+            <text x="${TECH_VIEW.width / 2}" y="${TECH_VIEW.height / 2}" text-anchor="middle" font-size="14" fill="#475569">Sin datos suficientes para visualización isométrica</text>
+            <text x="22" y="26" font-size="13" font-weight="700" fill="#1f2937">Vista isométrica · ${escapeHtml(viz?.metrics?.pattern || 'sin_datos')}</text>
+          </svg>
+        `;
+      }
+
       const maxDim = Math.max(viz.box.length, viz.box.width, viz.box.height, 1);
-      const settings = {
+      const baseSettings = {
         scaleX: 360 / maxDim,
         scaleY: 190 / maxDim,
         scaleZ: 300 / maxDim
       };
 
-      const centerX = TECH_VIEW.width * 0.50;
-      const centerY = TECH_VIEW.height * 0.78;
+      const padding = { left: 28, right: 28, top: 48, bottom: 60 };
+      const availableWidth = Math.max(1, TECH_VIEW.width - padding.left - padding.right);
+      const availableHeight = Math.max(1, TECH_VIEW.height - padding.top - padding.bottom);
+      const baseBounds = getIsoSceneBounds(viz, baseSettings, visibleLayer);
+
+      const sceneWidth = Math.max(1, baseBounds.maxX - baseBounds.minX);
+      const sceneHeight = Math.max(1, baseBounds.maxY - baseBounds.minY);
+      const fitScale = Math.min(1.28, Math.max(0.72, Math.min(availableWidth / sceneWidth, availableHeight / sceneHeight)));
+
+      const settings = {
+        scaleX: baseSettings.scaleX * fitScale,
+        scaleY: baseSettings.scaleY * fitScale,
+        scaleZ: baseSettings.scaleZ * fitScale
+      };
+
+      const finalBounds = getIsoSceneBounds(viz, settings, visibleLayer);
+      const sceneCenterX = (finalBounds.minX + finalBounds.maxX) / 2;
+      const sceneCenterY = (finalBounds.minY + finalBounds.maxY) / 2;
+      const targetCenterX = TECH_VIEW.width / 2;
+      const targetCenterY = padding.top + (availableHeight / 2);
+      const offsetX = targetCenterX - sceneCenterX;
+      const offsetY = targetCenterY - sceneCenterY;
 
       const sortedRolls = [...viz.rolls].sort((a, b) => {
         const depthA = (a.x + a.y);
         const depthB = (b.x + b.y);
         if (depthA !== depthB) return depthA - depthB;
+        if (a.y !== b.y) return a.y - b.y;
+        if (a.x !== b.x) return a.x - b.x;
         return a.z - b.z;
       });
 
-      const rollsSvg = sortedRolls.map(r => buildIsoRoll(r, settings, centerX, centerY, visibleLayer)).join('');
-      const boxSvg = buildIsoBoxWireframe(viz, settings, centerX, centerY);
+      const rollsSvg = sortedRolls.map(r => buildIsoRoll(r, settings, offsetX, offsetY, visibleLayer)).join('');
+      const boxSvg = buildIsoBoxWireframe(viz, settings, offsetX, offsetY);
 
       return `
         <svg width="${TECH_VIEW.width}" height="${TECH_VIEW.height}" viewBox="0 0 ${TECH_VIEW.width} ${TECH_VIEW.height}" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
