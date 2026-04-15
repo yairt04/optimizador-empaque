@@ -760,7 +760,7 @@
       };
     }
 
-    function getIsoSceneBounds(viz, settings, visibleLayer = 'all') {
+    function getIsoSceneBounds(viz, settings, rollsForBounds = []) {
       const hasValidBox = viz
         && viz.box
         && viz.box.length > 0
@@ -788,9 +788,7 @@
       ];
       corners3d.forEach(pushPoint);
 
-      const filteredRolls = (Array.isArray(viz.rolls) ? viz.rolls : []).filter(roll => (
-        visibleLayer === 'all' || roll.layer === visibleLayer
-      ));
+      const filteredRolls = Array.isArray(rollsForBounds) ? rollsForBounds : [];
 
       filteredRolls.forEach(roll => {
         const radiusWorld = Math.max(roll.diameter / 2, 0);
@@ -918,11 +916,38 @@
       `;
     }
 
+    function getLayerViewRolls(viz, visibleLayer, focusLayer) {
+      const sortedRolls = [...(Array.isArray(viz?.rolls) ? viz.rolls : [])].sort((a, b) => {
+        const depthA = (a.x + a.y);
+        const depthB = (b.x + b.y);
+        if (depthA !== depthB) return depthA - depthB;
+        if (a.y !== b.y) return a.y - b.y;
+        if (a.x !== b.x) return a.x - b.x;
+        return a.z - b.z;
+      });
+
+      if (visibleLayer === 'all') {
+        return sortedRolls
+          .filter(r => r.layer <= focusLayer)
+          .map(r => ({
+            renderMode: r.layer === focusLayer ? 'active' : 'ghost',
+            roll: { ...r }
+          }));
+      }
+
+      return sortedRolls
+        .filter(r => r.layer === visibleLayer)
+        .map(r => ({
+          renderMode: 'active',
+          roll: { ...r, z: 0 }
+        }));
+    }
+
     function getViewModeLabel(visibleLayer, focusLayer, totalLayers, visibleRollsCount) {
       if (visibleLayer === 'all') {
-        return `Vista activa: Todas las capas (contexto) · Capa destacada: ${num(focusLayer)} de ${num(totalLayers)} · Rollos mostrados completos: ${num(visibleRollsCount)} · Contexto visual: capas inferiores`;
+        return `Vista activa: Todas las capas (contexto) · Capa destacada: ${num(focusLayer)} de ${num(totalLayers)} · Representación: capa destacada completa + contexto inferior · Rollos mostrados completos: ${num(visibleRollsCount)}`;
       }
-      return `Vista activa: Capa ${num(visibleLayer)} de ${num(totalLayers)} · Rollos mostrados: ${num(visibleRollsCount)}`;
+      return `Vista activa: Capa ${num(visibleLayer)} de ${num(totalLayers)} · Representación: capa completa · Rollos mostrados: ${num(visibleRollsCount)}`;
     }
 
     function buildIsoSvg(viz, visibleLayer = 'all') {
@@ -951,7 +976,11 @@
       const padding = { left: 28, right: 28, top: 48, bottom: 60 };
       const availableWidth = Math.max(1, TECH_VIEW.width - padding.left - padding.right);
       const availableHeight = Math.max(1, TECH_VIEW.height - padding.top - padding.bottom);
-      const baseBounds = getIsoSceneBounds(viz, baseSettings, visibleLayer);
+      const totalLayers = Math.max(1, viz.metrics.totalLayers || 1);
+      const focusLayer = visibleLayer === 'all' ? totalLayers : visibleLayer;
+      const rollsForView = getLayerViewRolls(viz, visibleLayer, focusLayer);
+      const rollsForBounds = rollsForView.map(item => item.roll);
+      const baseBounds = getIsoSceneBounds(viz, baseSettings, rollsForBounds);
 
       const sceneWidth = Math.max(1, baseBounds.maxX - baseBounds.minX);
       const sceneHeight = Math.max(1, baseBounds.maxY - baseBounds.minY);
@@ -963,7 +992,7 @@
         scaleZ: baseSettings.scaleZ * fitScale
       };
 
-      const finalBounds = getIsoSceneBounds(viz, settings, visibleLayer);
+      const finalBounds = getIsoSceneBounds(viz, settings, rollsForBounds);
       const sceneCenterX = (finalBounds.minX + finalBounds.maxX) / 2;
       const sceneCenterY = (finalBounds.minY + finalBounds.maxY) / 2;
       const targetCenterX = TECH_VIEW.width / 2;
@@ -971,31 +1000,15 @@
       const offsetX = targetCenterX - sceneCenterX;
       const offsetY = targetCenterY - sceneCenterY;
 
-      const sortedRolls = [...viz.rolls].sort((a, b) => {
-        const depthA = (a.x + a.y);
-        const depthB = (b.x + b.y);
-        if (depthA !== depthB) return depthA - depthB;
-        if (a.y !== b.y) return a.y - b.y;
-        if (a.x !== b.x) return a.x - b.x;
-        return a.z - b.z;
-      });
-
-      const totalLayers = Math.max(1, viz.metrics.totalLayers || 1);
-      const focusLayer = visibleLayer === 'all' ? totalLayers : visibleLayer;
-      const visibleRollsCount = visibleLayer === 'all'
-        ? sortedRolls.filter(r => r.layer === focusLayer).length
-        : sortedRolls.filter(r => r.layer === visibleLayer).length;
-      const maxDepth = sortedRolls.reduce((acc, roll) => Math.max(acc, roll.x + roll.y), 1);
+      const visibleRollsCount = rollsForView.filter(item => item.renderMode === 'active').length;
+      const maxDepth = Math.max(1, ...rollsForView.map(item => item.roll.x + item.roll.y));
       const activeViewLabel = getViewModeLabel(visibleLayer, focusLayer, totalLayers, visibleRollsCount);
       const totalLayoutLabel = `Total del acomodo: ${num(viz.metrics.totalRolls)} rollos`;
-      const rollsSvg = sortedRolls.map(r => {
-        if (visibleLayer === 'all') {
-          if (r.layer === focusLayer) return buildIsoRollActive(r, settings, offsetX, offsetY, totalLayers, maxDepth);
-          if (r.layer < focusLayer) return buildIsoRollGhost(r, settings, offsetX, offsetY, totalLayers);
-          return '';
+      const rollsSvg = rollsForView.map(item => {
+        if (item.renderMode === 'active') {
+          return buildIsoRollActive(item.roll, settings, offsetX, offsetY, totalLayers, maxDepth);
         }
-        if (r.layer !== visibleLayer) return '';
-        return buildIsoRollActive(r, settings, offsetX, offsetY, totalLayers, maxDepth);
+        return buildIsoRollGhost(item.roll, settings, offsetX, offsetY, totalLayers);
       }).join('');
       const boxSvg = buildIsoBoxWireframe(viz, settings, offsetX, offsetY);
 
@@ -1025,7 +1038,7 @@
       options.push(`<option value="all"${selectedLayer === 'all' ? ' selected' : ''}>Todas las capas (contexto)</option>`);
 
       return `
-        <label for="layerSelect"><b>Modo de vista:</b></label>
+        <label for="layerSelect"><b>Modo de vista</b></label>
         <select id="layerSelect" style="margin-left:6px;min-height:28px;border:1px solid #d0d7e2;border-radius:6px;padding:2px 6px;background:#fff;">
           ${options.join('')}
         </select>
