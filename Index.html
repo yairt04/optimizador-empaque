@@ -863,10 +863,10 @@
       const lines = edges.map(edge => {
         const p1 = points[edge[0]];
         const p2 = points[edge[1]];
-        return `<line x1="${p1.x}" y1="${p1.y}" x2="${p2.x}" y2="${p2.y}" stroke="#94a3b8" stroke-opacity="0.07" stroke-width="0.40"/>`;
+        return `<line x1="${p1.x}" y1="${p1.y}" x2="${p2.x}" y2="${p2.y}" stroke="#64748b" stroke-opacity="0.24" stroke-width="0.62"/>`;
       }).join('');
 
-      const floor = `<polygon points="${points[0].x},${points[0].y} ${points[1].x},${points[1].y} ${points[2].x},${points[2].y} ${points[3].x},${points[3].y}" fill="#f8fafc" fill-opacity="0.035" stroke="#cbd5e1" stroke-opacity="0.05" stroke-width="0.36"/>`;
+      const floor = `<polygon points="${points[0].x},${points[0].y} ${points[1].x},${points[1].y} ${points[2].x},${points[2].y} ${points[3].x},${points[3].y}" fill="#e2e8f0" fill-opacity="0.16" stroke="#94a3b8" stroke-opacity="0.20" stroke-width="0.58"/>`;
 
       return floor + lines;
     }
@@ -969,6 +969,102 @@
       `;
     }
 
+    function getColumnHeight(column, compressionFactor = 1) {
+      const totalLevels = Math.max(1, valorNumericoSeguro(column?.totalLevels, 1));
+      const rollLength = Math.max(1, valorNumericoSeguro(column?.rollLength, 1));
+      return totalLevels * rollLength * Math.max(0.7, valorNumericoSeguro(compressionFactor, 1));
+    }
+
+    function groupRollsIntoColumns(rolls) {
+      const grouped = new Map();
+      const safeRolls = Array.isArray(rolls) ? rolls : [];
+
+      safeRolls.forEach((roll) => {
+        const key = [
+          valorNumericoSeguro(roll?.x, 0),
+          valorNumericoSeguro(roll?.y, 0),
+          valorNumericoSeguro(roll?.diameter, 0),
+          String(roll?.orientation || '')
+        ].join('|');
+
+        if (!grouped.has(key)) {
+          grouped.set(key, {
+            key,
+            baseX: valorNumericoSeguro(roll?.x, 0),
+            baseY: valorNumericoSeguro(roll?.y, 0),
+            diameter: Math.max(0, valorNumericoSeguro(roll?.diameter, 0)),
+            rollLength: Math.max(1, valorNumericoSeguro(roll?.length, 1)),
+            orientation: roll?.orientation || 'z',
+            layers: new Set(),
+            rollsCount: 0,
+            sampleId: String(roll?.id || '')
+          });
+        }
+
+        const column = grouped.get(key);
+        column.rollLength = Math.max(column.rollLength, Math.max(1, valorNumericoSeguro(roll?.length, 1)));
+        column.layers.add(Math.max(1, valorNumericoSeguro(roll?.layer, 1)));
+        column.rollsCount += 1;
+      });
+
+      return [...grouped.values()].map((column) => {
+        const totalLevels = Math.max(1, column.layers.size);
+        return {
+          ...column,
+          totalLevels,
+          z: 0,
+          height: getColumnHeight(column)
+        };
+      }).sort((a, b) => {
+        const depthA = (a.baseX + a.baseY);
+        const depthB = (b.baseX + b.baseY);
+        if (depthA !== depthB) return depthA - depthB;
+        if (a.baseY !== b.baseY) return a.baseY - b.baseY;
+        return a.baseX - b.baseX;
+      });
+    }
+
+    function buildIsoStackedTubeColumn(column, settings, offsetX, offsetY, maxDepth = 1) {
+      const base = isoProject({ x: column.baseX, y: column.baseY, z: column.z }, settings);
+      const top = isoProject({ x: column.baseX, y: column.baseY, z: column.z + column.height }, settings);
+      const cxBase = offsetX + base.x;
+      const cyBase = offsetY + base.y;
+      const cxTop = offsetX + top.x;
+      const cyTop = offsetY + top.y;
+
+      const radiusX = Math.max(2.8, (column.diameter * settings.scaleX) * 0.5);
+      const radiusY = Math.max(2.0, (column.diameter * settings.scaleY) * 0.5);
+      const innerRatio = getTubeInnerRatio({ diameter: column.diameter });
+      const innerRx = Math.max(1.4, radiusX * innerRatio);
+      const innerRy = Math.max(1.0, radiusY * innerRatio);
+      const depthShade = getDepthShade({ x: column.baseX, y: column.baseY }, maxDepth);
+      const bodyColor = adjustColor('#ff8500', depthShade - 2);
+      const strokeColor = adjustColor(bodyColor, -32);
+      const ringColor = adjustColor(bodyColor, 14);
+      const holeColor = adjustColor(bodyColor, 52);
+      const innerStroke = adjustColor(bodyColor, 8);
+      const innerHint = adjustColor(bodyColor, -8);
+      const topPoint = { x: cxTop, y: cyTop };
+      const basePoint = { x: cxBase, y: cyBase };
+      const colors = {
+        body: bodyColor,
+        stroke: strokeColor,
+        ring: ringColor,
+        hole: holeColor,
+        innerStroke,
+        innerHint
+      };
+
+      return `
+        <g>
+          ${buildIsoTubeOuterWall(topPoint, basePoint, radiusX, radiusY, colors)}
+          ${buildTubeInnerHint(topPoint, basePoint, innerRx, innerRy, colors)}
+          ${buildTubeTopRing(cxTop, cyTop, radiusX, radiusY, innerRx, innerRy, colors)}
+          <title>${escapeHtml(column.sampleId || column.key)} · Columna completa · Niveles ${column.totalLevels} · Rollos ${column.rollsCount}</title>
+        </g>
+      `;
+    }
+
     function getLayerViewRolls(viz, visibleLayer, focusLayer) {
       const sortedRolls = [...(Array.isArray(viz?.rolls) ? viz.rolls : [])].sort((a, b) => {
         const depthA = (a.x + a.y);
@@ -996,9 +1092,13 @@
         }));
     }
 
-    function getViewModeLabel(visibleLayer, focusLayer, totalLayers, visibleRollsCount) {
+    function getAllLayersViewDescription(totalLayers, totalRolls, totalColumns) {
+      return `Vista activa: Todas las capas · Representación: columnas completas por posición · Niveles simulados: ${num(totalLayers)} · Columnas visibles: ${num(totalColumns)} · Total del acomodo: ${num(totalRolls)} rollos`;
+    }
+
+    function getViewModeLabel(visibleLayer, focusLayer, totalLayers, visibleRollsCount, totalRolls, totalColumns = 0) {
       if (visibleLayer === 'all') {
-        return `Vista activa: Todas las capas (contexto) · Capa destacada: ${num(focusLayer)} de ${num(totalLayers)} · Representación: capa destacada completa + contexto inferior · Rollos mostrados completos: ${num(visibleRollsCount)}`;
+        return getAllLayersViewDescription(totalLayers, totalRolls, totalColumns);
       }
       return `Vista activa: Capa ${num(visibleLayer)} de ${num(totalLayers)} · Representación: capa completa · Rollos mostrados: ${num(visibleRollsCount)}`;
     }
@@ -1031,8 +1131,17 @@
       const availableHeight = Math.max(1, TECH_VIEW.height - padding.top - padding.bottom);
       const totalLayers = Math.max(1, viz.metrics.totalLayers || 1);
       const focusLayer = visibleLayer === 'all' ? totalLayers : visibleLayer;
-      const rollsForView = getLayerViewRolls(viz, visibleLayer, focusLayer);
-      const rollsForBounds = rollsForView.map(item => item.roll);
+      const allLayerColumns = visibleLayer === 'all' ? groupRollsIntoColumns(viz.rolls) : [];
+      const rollsForView = visibleLayer === 'all' ? [] : getLayerViewRolls(viz, visibleLayer, focusLayer);
+      const rollsForBounds = visibleLayer === 'all'
+        ? allLayerColumns.map(column => ({
+          x: column.baseX,
+          y: column.baseY,
+          z: column.z,
+          length: column.height,
+          diameter: column.diameter
+        }))
+        : rollsForView.map(item => item.roll);
       const baseBounds = getIsoSceneBounds(viz, baseSettings, rollsForBounds);
 
       const sceneWidth = Math.max(1, baseBounds.maxX - baseBounds.minX);
@@ -1054,15 +1163,27 @@
       const offsetY = targetCenterY - sceneCenterY;
 
       const visibleRollsCount = rollsForView.filter(item => item.renderMode === 'active').length;
-      const maxDepth = Math.max(1, ...rollsForView.map(item => item.roll.x + item.roll.y));
-      const activeViewLabel = getViewModeLabel(visibleLayer, focusLayer, totalLayers, visibleRollsCount);
+      const maxDepthCandidates = visibleLayer === 'all'
+        ? allLayerColumns.map(column => column.baseX + column.baseY)
+        : rollsForView.map(item => item.roll.x + item.roll.y);
+      const maxDepth = Math.max(1, ...maxDepthCandidates);
+      const activeViewLabel = getViewModeLabel(
+        visibleLayer,
+        focusLayer,
+        totalLayers,
+        visibleRollsCount,
+        viz.metrics.totalRolls,
+        allLayerColumns.length
+      );
       const totalLayoutLabel = `Total del acomodo: ${num(viz.metrics.totalRolls)} rollos`;
-      const rollsSvg = rollsForView.map(item => {
-        if (item.renderMode === 'active') {
-          return buildIsoTubeActive(item.roll, settings, offsetX, offsetY, totalLayers, maxDepth);
-        }
-        return buildIsoTubeGhost(item.roll, settings, offsetX, offsetY, totalLayers);
-      }).join('');
+      const rollsSvg = visibleLayer === 'all'
+        ? allLayerColumns.map(column => buildIsoStackedTubeColumn(column, settings, offsetX, offsetY, maxDepth)).join('')
+        : rollsForView.map(item => {
+          if (item.renderMode === 'active') {
+            return buildIsoTubeActive(item.roll, settings, offsetX, offsetY, totalLayers, maxDepth);
+          }
+          return buildIsoTubeGhost(item.roll, settings, offsetX, offsetY, totalLayers);
+        }).join('');
       const boxSvg = buildIsoBoxWireframe(viz, settings, offsetX, offsetY);
 
       return `
@@ -1088,7 +1209,7 @@
         if (layer === topLayer) continue;
         options.push(`<option value="${layer}"${selectedLayer === layer ? ' selected' : ''}>Capa ${layer}</option>`);
       }
-      options.push(`<option value="all"${selectedLayer === 'all' ? ' selected' : ''}>Todas las capas (contexto)</option>`);
+      options.push(`<option value="all"${selectedLayer === 'all' ? ' selected' : ''}>Todas las capas (columnas completas)</option>`);
 
       return `
         <label for="layerSelect"><b>Modo de vista</b></label>
